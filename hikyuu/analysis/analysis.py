@@ -5,7 +5,7 @@
 #    Author: fasiondog
 
 import pandas as pd
-from hikyuu.core import Block, Performance, inner_combinate_ind_analysis, inner_combinate_ind_analysis_with_block
+from hikyuu.core import *
 
 
 def combinate_ind_analysis(
@@ -31,6 +31,11 @@ def combinate_ind_analysis(
     :param list keys: 输出 Performance 统计项
     :rtype: pd.DataFrame
     '''
+    if not keys:
+        for key in keys:
+            if not Performance.exist(key):
+                raise Exception(f'Invalid key: {key}')
+
     pers = inner_combinate_ind_analysis(stk, query, tm, sys, buy_inds, sell_inds, n)
 
     if not keys:
@@ -75,6 +80,11 @@ def combinate_ind_analysis_multi(
     :param int n: 买入信号组合时的周期
     :param list keys: 输出 Performance 统计项
     '''
+    if not keys:
+        for key in keys:
+            if not Performance.exist(key):
+                raise Exception(f'Invalid key: {key}')
+
     if isinstance(stks, Block):
         blks = stks
     else:
@@ -88,6 +98,53 @@ def combinate_ind_analysis_multi(
     else:
         ret = {}
         names = ["组合名称", "证券代码", "证券名称"]
+        names.extend(keys)
+        for name in names:
+            ret[name] = out[name]
+    return pd.DataFrame(ret)
+
+
+def analysis_sys_list(stks, query, sys_proto, keys=["累计投入本金", "当前总资产", "现金余额", "未平仓头寸净值", "赢利交易比例%", "赢利交易数", "亏损交易数"]):
+    if not keys:
+        for key in keys:
+            if not Performance.exist(key):
+                raise Exception(f'Invalid key: {key}')
+
+    names = ["证券代码", "证券名称"]
+    names.extend(keys)
+    ret = {}
+    for name in names:
+        ret[name] = []
+
+    per = Performance()
+    sys_proto.force_reset_all()
+    sys_proto.set_param("shared_ev", False)
+    for stk in stks:
+        # print(stk)
+        k = stk.get_kdata(query)
+        my_sys = sys_proto.clone()
+        my_sys.run(k, reset_all=True)
+        if len(k) > 0:
+            per.statistics(my_sys.tm, k[-1].datetime)
+            ret["证券代码"].append(stk.market_code)
+            ret["证券名称"].append(stk.name)
+            for key in keys:
+                ret[key].append(per[key])
+    return pd.DataFrame(ret)
+
+
+def analysis_sys_list_multi(stks, query, sys_proto, keys=["累计投入本金", "当前总资产", "现金余额", "未平仓头寸净值", "赢利交易比例%", "赢利交易数", "亏损交易数"]):
+    if not keys:
+        for key in keys:
+            if not Performance.exist(key):
+                raise Exception(f'Invalid key: {key}')
+
+    out = inner_analysis_sys_list(stks, query, sys_proto)
+    if not keys:
+        ret = out
+    else:
+        ret = {}
+        names = ["证券代码", "证券名称"]
         names.extend(keys)
         for name in names:
             ret[name] = out[name]

@@ -101,6 +101,21 @@ def import_stock_name(connect, api, market, quotations=None):
     """
     cur = connect.cursor()
 
+    deSet = set()  # 记录退市证券
+    if market == MARKET.SH:
+        df = ak.stock_info_sh_delist()
+        l = df[['公司代码', '公司简称']].to_dict(orient='records') if not df .empty else []
+        for stock in l:
+            code = str(stock['公司代码'])
+            deSet.add(code)
+    elif market == MARKET.SZ:
+        for t in ['暂停上市公司', '终止上市公司']:
+            df = ak.stock_info_sz_delist(t)
+            l = df[['证券代码', '证券简称']].to_dict(orient='records') if not df.empty else []
+            for stock in l:
+                code = str(stock['证券代码'])
+                deSet.add(code)
+
     newStockDict = {}
     stk_list = get_stk_code_name_list(market)
     if not stk_list:
@@ -110,7 +125,9 @@ def import_stock_name(connect, api, market, quotations=None):
     if not quotations or 'fund' in [v.lower() for v in quotations]:
         stk_list.extend(get_fund_code_name_list(market))
     for stock in stk_list:
-        newStockDict[str(stock['code'])] = stock['name']
+        code = str(stock['code'])
+        if code not in deSet:
+            newStockDict[code] = stock['name']
 
     marketid = get_marketid(connect, market)
 
@@ -127,8 +144,8 @@ def import_stock_name(connect, api, market, quotations=None):
         oldstockid, oldcode, oldname, oldvalid = oldstock[0], oldstock[1], oldstock[2], int(oldstock[3])
         oldStockDict[oldcode] = oldstockid
 
-        # 新的代码表中无此股票，则置为无效
-        if (oldvalid == 1) and (oldcode not in newStockDict):
+        # 新的代码表中无此股票或者已退市，则置为无效
+        if (oldvalid == 1) and ((oldcode not in newStockDict) or (oldcode in deSet)):
             cur.execute("update stock set valid=0 where stockid=%i" % oldstockid)
 
         # 股票名称发生变化，更新股票名称;如果原无效，则置为有效
@@ -150,14 +167,14 @@ def import_stock_name(connect, api, market, quotations=None):
                 length = len(codepre[0])
                 if code[:length] == codepre[0]:
                     count += 1
-                    #print(market, code, newStockDict[code], codepre)
+                    # print(market, code, newStockDict[code], codepre)
                     sql = "insert into Stock(marketid, code, name, type, valid, startDate, endDate) \
                            values (%s, '%s', '%s', %s, %s, %s, %s)" \
                           % (marketid, code, newStockDict[code], codepre[1], 1, today, 99999999)
                     cur.execute(sql)
                     break
 
-    #print('%s新增股票数：%i' % (market.upper(), count))
+    # print('%s新增股票数：%i' % (market.upper(), count))
     connect.commit()
     cur.close()
     return count
@@ -220,7 +237,7 @@ def import_one_stock_data(connect, api, h5file, market, ktype, stock_record, sta
     pytdx_market = to_pytdx_market(market)
 
     stockid, marketid, code, valid, stktype = stock_record[0], stock_record[1], stock_record[2], stock_record[3], \
-                                              stock_record[4]
+        stock_record[4]
 
     hku_debug("{}{} {}".format(market, code, ktype))
     table = get_h5table(h5file, market, code)
@@ -260,23 +277,26 @@ def import_one_stock_data(connect, api, h5file, market, ktype, stock_record, sta
         bar_list = get_bars(pytdx_kline_type, pytdx_market, code, n * 800, step)
         n -= 1
         if bar_list is None:
-            #print(code, "invalid!!")
+            # print(code, "invalid!!")
             continue
 
         for bar in bar_list:
             try:
-                tmp = datetime.date(bar['year'], bar['month'], bar['day'])
-                bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * 10000
-                if ktype != 'DAY':
-                    bar_datetime += bar['hour'] * 100 + bar['minute']
+                if ktype == "DAY":
+                    tmp = datetime.date(bar["year"], bar["month"], bar["day"])
+                    bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * 10000
+                else:
+                    tmp = datetime.datetime(bar["year"], bar["month"], bar["day"], bar['hour'], bar['minute'])
+                    bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * \
+                        10000 + bar["hour"] * 100 + bar["minute"]
             except Exception as e:
-                hku_error("Failed translate datetime: {}! {}".format(bar, e))
+                hku_error("Failed translate datetime: {}, from {}! {}".format(bar, api.ip, e))
                 continue
 
             if today_datetime >= bar_datetime > last_datetime \
                     and bar['high'] >= bar['open'] >= bar['low'] > 0 \
                     and bar['high'] >= bar['close'] >= bar['low'] > 0 \
-                    and int(bar['vol']) != 0 and int(bar['amount']*0.001) != 0:
+                    and int(bar['vol']) >= 0 and int(bar['amount']*0.001) >= 0:
                 try:
                     row['datetime'] = bar_datetime
                     row['openPrice'] = bar['open'] * 1000
@@ -293,11 +313,11 @@ def import_one_stock_data(connect, api, h5file, market, ktype, stock_record, sta
 
     if add_record_count > 0:
         table.flush()
-        #print(market, stock_record)
+        # print(market, stock_record)
 
         if ktype == 'DAY':
             # 更新基础信息数据库中股票对应的起止日期及其有效标志
-            #if valid == 0:
+            # if valid == 0:
             cur = connect.cursor()
             cur.execute(
                 "update stock set valid=1, startdate=%i, enddate=%i where stockid=%i" %
@@ -313,10 +333,10 @@ def import_one_stock_data(connect, api, h5file, market, ktype, stock_record, sta
                 update_last_date(connect, marketid, table[-1]['datetime'] / 10000)
 
     elif table.nrows == 0:
-        #print(market, stock_record)
+        # print(market, stock_record)
         table.remove()
 
-    #table.close()
+    # table.close()
     return add_record_count
 
 
@@ -342,7 +362,7 @@ def import_data(connect, market, ktype, quotations, api, dest_dir, startDate=199
 
     total = len(stock_list)
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0:
+        if stock[3] == 0 or len(stock[2]) != 6:
             if progress:
                 progress(i, total)
             continue
@@ -367,7 +387,7 @@ def import_on_stock_trans(connect, api, h5file, market, stock_record, max_days):
     pytdx_market = to_pytdx_market(market)
 
     stockid, marketid, code, valid, stktype = stock_record[0], stock_record[1], stock_record[2], stock_record[3], \
-                                              stock_record[4]
+        stock_record[4]
     hku_debug("{}{}".format(market, code))
     table = get_trans_table(h5file, market, code)
     if table is None:
@@ -443,15 +463,16 @@ def import_trans(connect, market, quotations, api, dest_dir, max_days=30, progre
     stock_list = get_stock_list(connect, market, quotations)
 
     total = len(stock_list)
+    a_stktype_list = get_a_stktype_list()
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0 or stock[4] not in (STOCKTYPE.A, STOCKTYPE.B, STOCKTYPE.GEM):
+        if stock[3] == 0 or len(stock[2]) != 6 or stock[4] not in a_stktype_list:
             if progress:
                 progress(i, total)
             continue
 
         this_count = import_on_stock_trans(connect, api, h5file, market, stock, max_days)
         add_record_count += this_count
-        #if add_record_count > 0:
+        # if add_record_count > 0:
         #    update_hdf5_trans_index(h5file, market.upper() + stock[2])
         if progress:
             progress(i, total)
@@ -466,7 +487,7 @@ def import_on_stock_time(connect, api, h5file, market, stock_record, max_days):
     pytdx_market = to_pytdx_market(market)
 
     stockid, marketid, code, valid, stktype = stock_record[0], stock_record[1], stock_record[2], stock_record[3], \
-                                              stock_record[4]
+        stock_record[4]
     hku_debug("{}{}".format(market, code))
     table = get_time_table(h5file, market, code)
     if table is None:
@@ -502,7 +523,7 @@ def import_on_stock_time(connect, api, h5file, market, stock_record, max_days):
     for cur_date in date_list:
         buf = api.get_history_minute_time_data(pytdx_market, stock_record[2], cur_date)
         if buf is None or len(buf) != 240:
-            #print(cur_date, "获取的分时线长度不为240!", stock_record[1], stock_record[2])
+            # print(cur_date, "获取的分时线长度不为240!", stock_record[1], stock_record[2])
             continue
         this_date = cur_date * 10000
         time = 930
@@ -542,7 +563,7 @@ def import_time(connect, market, quotations, api, dest_dir, max_days=9000, progr
 
     total = len(stock_list)
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0:
+        if stock[3] == 0 or len(stock[2]) != 6:
             if progress:
                 progress(i, total)
             continue
@@ -582,7 +603,7 @@ if __name__ == '__main__':
     """
     print("导入股票代码表")
     add_count = import_stock_name(connect, api, 'SH', quotations)
-    #add_count += import_stock_name(connect, api, 'SZ', quotations)
+    # add_count += import_stock_name(connect, api, 'SZ', quotations)
     print("新增股票数：", add_count)
     """
     print("\n导入上证日线数据")

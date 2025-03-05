@@ -19,6 +19,13 @@ FixedUnitsMoneyManager::FixedUnitsMoneyManager() : MoneyManagerBase("MM_FixedUni
 
 FixedUnitsMoneyManager::~FixedUnitsMoneyManager() {}
 
+void FixedUnitsMoneyManager::_checkParam(const string& name) const {
+    if ("n" == name) {
+        int n = getParam<int>("n");
+        HKU_ASSERT(n > 0);
+    }
+}
+
 double FixedUnitsMoneyManager ::_getBuyNumber(const Datetime& datetime, const Stock& stock,
                                               price_t price, price_t risk, SystemPart from) {
     int n = getParam<int>("n");
@@ -30,9 +37,9 @@ double FixedUnitsMoneyManager ::_getBuyNumber(const Datetime& datetime, const St
 }
 
 MoneyManagerPtr HKU_API MM_FixedUnits(int n) {
-    FixedUnitsMoneyManager* p = new FixedUnitsMoneyManager();
+    MoneyManagerPtr p = make_shared<FixedUnitsMoneyManager>();
     p->setParam<int>("n", n);
-    return MoneyManagerPtr(p);
+    return p;
 }
 
 } /* namespace hku */

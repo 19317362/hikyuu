@@ -22,8 +22,11 @@ IStdp::IStdp() : IndicatorImp("STDP", 1) {
 
 IStdp::~IStdp() {}
 
-bool IStdp::check() {
-    return getParam<int>("n") >= 2;
+void IStdp::_checkParam(const string& name) const {
+    if ("n" == name) {
+        int n = getParam<int>("n");
+        HKU_ASSERT(n == 0 || n >= 2);
+    }
 }
 
 void IStdp::_calculate(const Indicator& data) {
@@ -35,32 +38,38 @@ void IStdp::_calculate(const Indicator& data) {
     }
 
     int n = getParam<int>("n");
+    if (0 == n) {
+        n = total;
+    }
+
+    auto const* src = data.data();
+    auto* dst = this->data();
 
     vector<price_t> pow_buf(data.size());
     price_t ex = 0.0, ex2 = 0.0;
     size_t num = 0;
     size_t start_pos = m_discard;
     size_t first_end = start_pos + n >= total ? total : start_pos + n;
-    price_t k = data[start_pos];
+    price_t k = src[start_pos];
     for (size_t i = start_pos; i < first_end; i++) {
         num++;
-        price_t d = data[i] - k;
+        price_t d = src[i] - k;
         ex += d;
         price_t d_pow = std::pow(d, 2);
         pow_buf[i] = d_pow;
         ex2 += d_pow;
-        _set(std::sqrt((ex2 - std::pow(ex, 2) / num) / num), i);
+        dst[i] = std::sqrt((ex2 - std::pow(ex, 2) / num) / num);
     }
 
     for (size_t i = first_end; i < total; i++) {
-        ex -= data[i - n] - k;
+        ex -= src[i - n] - k;
         ex2 -= pow_buf[i - n];
-        price_t d = data[i] - k;
+        price_t d = src[i] - k;
         ex += d;
         price_t d_pow = std::pow(d, 2);
         pow_buf[i] = d_pow;
         ex2 += d_pow;
-        _set(std::sqrt((ex2 - std::pow(ex, 2) / n) / n), i);
+        dst[i] = std::sqrt((ex2 - std::pow(ex, 2) / n) / n);
     }
 }
 

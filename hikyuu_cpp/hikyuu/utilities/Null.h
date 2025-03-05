@@ -10,6 +10,8 @@
 #define NULL_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <cmath>
 #include <limits>
 #include <type_traits>
 #include "osdef.h"
@@ -122,7 +124,51 @@ public:
         return (std::numeric_limits<double>::quiet_NaN)();
         // return (std::numeric_limits<double>::max)();
     }
+
+    bool operator==(double val) const {
+        return std::isnan(val);
+    }
+
+    bool operator==(float val) const {
+        return std::isnan(val);
+    }
 };
+
+inline bool operator==(double val, const Null<double>&) {
+    return std::isnan(val);
+}
+
+inline bool operator==(float val, const Null<double>&) {
+    return std::isnan(val);
+}
+
+/**
+ * 提供double的Null值
+ */
+template <>
+class Null<float> {
+public:
+    Null() {}
+    operator float() const {
+        return (std::numeric_limits<float>::quiet_NaN)();
+    }
+
+    bool operator==(float val) const {
+        return std::isnan(val);
+    }
+
+    bool operator==(double val) const {
+        return std::isnan(val);
+    }
+};
+
+inline bool operator==(float val, const Null<float>&) {
+    return std::isnan(val);
+}
+
+inline bool operator==(double val, const Null<float>&) {
+    return std::isnan(val);
+}
 
 /** @} */
 }  // namespace hku

@@ -13,9 +13,6 @@
 #include "../StockWeight.h"
 
 #if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/nvp.hpp>
-#include <boost/serialization/split_free.hpp>
-#include <boost/serialization/vector.hpp>
 
 namespace boost {
 namespace serialization {
@@ -29,6 +26,7 @@ void save(Archive& ar, const hku::StockWeight& record, unsigned int version) {
     hku::price_t increasement = record.increasement();
     hku::price_t totalCount = record.totalCount();
     hku::price_t freeCount = record.freeCount();
+    hku::price_t suogu = record.suogu();
     ar& BOOST_SERIALIZATION_NVP(datetime);
     ar& BOOST_SERIALIZATION_NVP(countAsGift);
     ar& BOOST_SERIALIZATION_NVP(countForSell);
@@ -37,13 +35,14 @@ void save(Archive& ar, const hku::StockWeight& record, unsigned int version) {
     ar& BOOST_SERIALIZATION_NVP(increasement);
     ar& BOOST_SERIALIZATION_NVP(totalCount);
     ar& BOOST_SERIALIZATION_NVP(freeCount);
+    ar& BOOST_SERIALIZATION_NVP(suogu);
 }
 
 template <class Archive>
 void load(Archive& ar, hku::StockWeight& record, unsigned int version) {
     hku::uint64_t datetime;
     hku::price_t countAsGift, countForSell, priceForSell, bonus;
-    hku::price_t increasement, totalCount, freeCount;
+    hku::price_t increasement, totalCount, freeCount, suogu;
     ar& BOOST_SERIALIZATION_NVP(datetime);
     ar& BOOST_SERIALIZATION_NVP(countAsGift);
     ar& BOOST_SERIALIZATION_NVP(countForSell);
@@ -52,8 +51,9 @@ void load(Archive& ar, hku::StockWeight& record, unsigned int version) {
     ar& BOOST_SERIALIZATION_NVP(increasement);
     ar& BOOST_SERIALIZATION_NVP(totalCount);
     ar& BOOST_SERIALIZATION_NVP(freeCount);
+    ar& BOOST_SERIALIZATION_NVP(suogu);
     record = hku::StockWeight(hku::Datetime(datetime), countAsGift, countForSell, priceForSell,
-                              bonus, increasement, totalCount, freeCount);
+                              bonus, increasement, totalCount, freeCount, suogu);
 }
 }  // namespace serialization
 }  // namespace boost

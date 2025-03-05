@@ -26,7 +26,7 @@ jobs:
 
     - name: Cache xmake aarch64 packages
       id: cache-xmake-ubuntu-aarch64
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       env:
         cache-name: cache-ubuntu-aarch64-modules
       with:
@@ -41,8 +41,9 @@ jobs:
 
     - uses: xmake-io/github-action-setup-xmake@v1
       with:
-        xmake-version: branch@master
+        xmake-version: 2.9.3
         actions-cache-folder: '.xmake-cache'
+        actions-cache-key: 'ubuntu-aarch64'
 
     - name: Installation musl
       run: |
@@ -51,7 +52,7 @@ jobs:
 
     - name: configure
       run: |
-        xmake f -p cross -a aarch64 --sdk=`pwd`/${{ matrix.cross }}-cross -k shared -y
+        xmake f -p cross -a aarch64 --sdk=`pwd`/${{ matrix.cross }}-cross -k shared --low_precision=y -y
 
     - name: build
       run: |

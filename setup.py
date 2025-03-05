@@ -105,7 +105,7 @@ def clear_with_python_changed(mode):
 # ------------------------------------------------------------------------------
 # 执行构建
 # ------------------------------------------------------------------------------
-def start_build(verbose=False, mode='release', feedback=True, worker_num=2):
+def start_build(verbose=False, mode='release', feedback=True, worker_num=2, low_precision=False):
     """ 执行编译 """
     global g_verbose
     g_verbose = verbose
@@ -123,21 +123,22 @@ def start_build(verbose=False, mode='release', feedback=True, worker_num=2):
     if py_version != history_compile_info[
             'py_version'] or history_compile_info['mode'] != mode:
         clear_with_python_changed(mode)
-        cmd = "xmake f {} -c -y -m {} --feedback={} -k {}".format(
-            "-v -D" if verbose else "", mode, feedback, "shared" if mode == 'release' else "static")
+        kind = "shared" if mode == 'release' and sys.platform != 'darwin' else "static"
+        cmd = "xmake f {} -c -y -m {} --feedback={} -k {} --low_precision={} --log_level={}".format(
+            "-v -D" if verbose else "", mode, feedback, kind, low_precision,
+            2 if mode == 'release' else 0)
+
+        # macosx 下动态库不支持 serialize, 静态库太大不适合打包（hub中使用C++需要使用)
+        # 静态库在 macosx 下支持 hub，也很麻烦，暂时搁置
+        # if sys.platform == 'darwin':
+        #     cmd += " --serialize=n"
         print(cmd)
         os.system(cmd)
 
-    if mode == "release":
-        cmd = "xmake -j {} -b {} core".format(worker_num,
-                                              "-v -D" if verbose else "")
-        print(cmd)
-        os.system(cmd)
-    else:
-        cmd = "xmake -j {} -b {} hikyuu".format(worker_num,
-                                                "-v -D" if verbose else "")
-        print(cmd)
-        os.system(cmd)
+    cmd = "xmake -j {} -b {} core".format(worker_num,
+                                          "-v -D" if verbose else "")
+    print(cmd)
+    os.system(cmd)
 
     # 保存当前的编译信息
     save_current_compile_info(current_compile_info)
@@ -169,9 +170,14 @@ def cli():
                   'lsan'
               ]),
               help='编译模式')
-def build(verbose, mode, feedback, j):
+@click.option('-low_precision',
+              '--low_precision',
+              default=False,
+              type=bool,
+              help='使用低精度版本')
+def build(verbose, mode, feedback, j, low_precision):
     """ 执行编译 """
-    start_build(verbose, mode, feedback, j)
+    start_build(verbose, mode, feedback, j, low_precision)
 
 
 @click.command()
@@ -193,13 +199,18 @@ def build(verbose, mode, feedback, j):
               ]),
               help='编译模式')
 @click.option('-case', '--case', default='', help="执行指定的 TestCase")
-def test(all, compile, verbose, mode, case, feedback, j):
+@click.option('-low_precision',
+              '--low_precision',
+              default=False,
+              type=bool,
+              help='使用低精度版本')
+def test(all, compile, verbose, mode, case, feedback, j, low_precision):
     """ 执行单元测试 """
     current_compile_info = get_current_compile_info()
     current_compile_info['mode'] = mode
     history_compile_info = get_history_compile_info()
     if compile or current_compile_info != history_compile_info:
-        start_build(verbose, mode, feedback, j)
+        start_build(verbose, mode, feedback, j, low_precision)
     if all:
         os.system("xmake -j {} -b {} unit-test".format(
             j, "-v -D" if verbose else ""))
@@ -259,10 +270,44 @@ def uninstall():
     print("Uninstall finished!")
 
 
+def copy_include(install_dir):
+    src_path = 'hikyuu_cpp/hikyuu'
+    dst_path = f'{install_dir}/include'
+
+    for root, dirs, files in os.walk(src_path):
+        for p in dirs:
+            dst_p = f'{dst_path}/{root[11:]}/{p}'
+            if not os.path.lexists(dst_p):
+                os.makedirs(dst_p)
+            shutil.copy('hikyuu/cpp/__init__.py', dst_p)
+
+        for fname in files:
+            if len(fname) > 2 and fname[-2:] == ".h":
+                dst_p = f'{dst_path}/{root[11:]}'
+                if not os.path.lexists(dst_p):
+                    os.makedirs(dst_p)
+                shutil.copy(f'{root}/{fname}', dst_p)
+
+    dst_path = f'{install_dir}/include/hikyuu/python'
+    if not os.path.lexists(dst_path):
+        os.makedirs(dst_path)
+    shutil.copy('hikyuu_pywrap/pybind_utils.h', dst_path)
+    shutil.copy('hikyuu_pywrap/pickle_support.h', dst_path)
+    shutil.copy('hikyuu_pywrap/convert_any.h', dst_path)
+    shutil.copy('hikyuu/cpp/__init__.py', dst_path)
+    shutil.copy('hikyuu/cpp/__init__.py', f'{install_dir}/include')
+    shutil.copy('hikyuu/cpp/__init__.py', f'{install_dir}/include/hikyuu')
+
+
+@click.command()
 @click.option('-j', '--j', default=2, help="并行编译数量")
 @click.option('-o', '--o', help="指定的安装目录")
-@click.command()
-def install(j, o):
+@click.option('-low_precision',
+              '--low_precision',
+              default=False,
+              type=bool,
+              help='使用低精度版本')
+def install(j, o, low_precision):
     """ 编译并安装 Hikyuu python 库 """
     install_dir = o
     if install_dir is None:
@@ -277,9 +322,11 @@ def install(j, o):
             except:
                 pass
 
-    start_build(False, 'release', True, j)
+    start_build(False, 'release', True, j, low_precision)
 
     shutil.copytree("./hikyuu", install_dir)
+
+    copy_include(install_dir)
 
 
 @click.command()
@@ -289,46 +336,56 @@ def install(j, o):
               default=True,
               type=bool,
               help='允许发送反馈信息')
-def wheel(feedback, j):
+@click.option('-low_precision',
+              '--low_precision',
+              default=False,
+              type=bool,
+              help='使用低精度版本')
+@click.option('-c', '--clear', is_flag=False, help='先清除之前编译结果')
+def wheel(feedback, j, low_precision, clear):
     """ 生成 python 的 wheel 安装包 """
     # 清理之前遗留的打包产物
-    clear_build()
+    if clear:
+        clear_build()
 
     # 尝试编译
-    start_build(False, 'release', feedback, j)
+    start_build(False, 'release', feedback, j, low_precision)
+
+    copy_include('hikyuu')
 
     # 构建打包命令
     print("start pacakaging bdist_wheel ...")
     current_plat = sys.platform
+    cpu_arch = platform.machine()
     current_bits = 64 if sys.maxsize > 2**32 else 32
     if current_plat == 'win32' and current_bits == 64:
-        plat = "win-amd64"
+        plat = "win_amd64"
     elif current_plat == 'win32' and current_bits == 32:
         plat = "win32"
     elif current_plat == 'linux' and current_bits == 64:
-        plat = "manylinux1_x86_64"
+        plat = f"manylinux1_{cpu_arch}"
     elif current_plat == 'linux' and current_bits == 32:
-        plat = "manylinux1_i386"
-    elif current_plat == 'darwin' and current_bits == 32:
+        plat = f"manylinux1_{cpu_arch}"
+    elif current_plat == 'darwin' and cpu_arch != 'arm64' and current_bits == 32:
         plat = "macosx_i686"
-    elif current_plat == 'darwin' and current_bits == 64:
-        plat = "macosx_10_9_x86_64"
+    elif current_plat == 'darwin' and cpu_arch != 'arm64' and current_bits == 64:
+        plat = "macosx_x86_64"
+    elif current_plat == 'darwin' and cpu_arch == 'arm64':
+        plat = "macosx_11_1_arm64"
     else:
         print("*********尚未实现该平台的支持*******")
         return
 
+    if low_precision:
+        plat = f"{plat}_low_precision"
+
     py_version = get_python_version()
     main_ver, min_ver = py_version.split('.')
-    if current_plat == 'win32':
-        cmd = 'python sub_setup.py bdist_wheel --python-tag cp{}{} -p {}'.format(
-            main_ver, min_ver, plat)
-        print(cmd)
-        os.system(cmd)
-    else:
-        cmd = 'python3 sub_setup.py bdist_wheel --python-tag cp{}{} -p {}'.format(
-            main_ver, min_ver, plat)
-        print(cmd)
-        os.system(cmd)
+    cmd = 'python sub_setup.py bdist_wheel -p {}'.format(plat)
+    print(cmd)
+    os.system(cmd)
+
+    shutil.rmtree('hikyuu/include', True)
 
 
 @click.command()

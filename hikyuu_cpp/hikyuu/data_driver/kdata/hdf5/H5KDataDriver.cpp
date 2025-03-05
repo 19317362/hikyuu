@@ -6,6 +6,7 @@
  */
 
 #include <boost/algorithm/string.hpp>
+#include "hikyuu/utilities/os.h"
 #include "H5KDataDriver.h"
 
 #if H5_VERSION_GE(1, 12, 0)
@@ -87,7 +88,7 @@ H5KDataDriver::H5KDataDriver() : KDataDriver("hdf5"), m_h5DataType(H5::CompType(
 H5KDataDriver::~H5KDataDriver() {}
 
 bool H5KDataDriver::_init() {
-    //关闭HDF异常自动打印
+    // 关闭HDF异常自动打印
     H5::Exception::dontPrint();
 
     StringList keys = m_params.getNameList();
@@ -102,9 +103,14 @@ bool H5KDataDriver::_init() {
         to_upper(market);
         to_upper(ktype);
 
+        filename = getParam<string>(*iter);
+        if (!existFile(filename)) {
+            // HKU_ERROR("Can't open h5file: {}", filename);
+            continue;
+        }
+
         try {
             if (ktype == KQuery::getKTypeName(KQuery::DAY)) {
-                filename = getParam<string>(*iter);
                 H5FilePtr h5file(new H5::H5File(filename, H5F_ACC_RDONLY), Hdf5FileCloser());
                 m_h5file_map[market + "_DAY"] = h5file;
                 m_h5file_map[market + "_WEEK"] = h5file;
@@ -114,12 +120,10 @@ bool H5KDataDriver::_init() {
                 m_h5file_map[market + "_YEAR"] = h5file;
 
             } else if (ktype == KQuery::getKTypeName(KQuery::MIN)) {
-                filename = getParam<string>(*iter);
                 H5FilePtr h5file(new H5::H5File(filename, H5F_ACC_RDONLY), Hdf5FileCloser());
                 m_h5file_map[market + "_MIN"] = h5file;
 
             } else if (ktype == KQuery::getKTypeName(KQuery::MIN5)) {
-                filename = getParam<string>(*iter);
                 H5FilePtr h5file(new H5::H5File(filename, H5F_ACC_RDONLY), Hdf5FileCloser());
                 m_h5file_map[market + "_MIN5"] = h5file;
                 m_h5file_map[market + "_MIN15"] = h5file;
@@ -128,18 +132,16 @@ bool H5KDataDriver::_init() {
                 m_h5file_map[market + "_HOUR2"] = h5file;
 
             } else if (ktype == "TIME") {
-                filename = getParam<string>(*iter);
                 H5FilePtr h5file(new H5::H5File(filename, H5F_ACC_RDONLY), Hdf5FileCloser());
                 m_h5file_map[market + "_TIME"] = h5file;
 
             } else if (ktype == "TRANS") {
-                filename = getParam<string>(*iter);
                 H5FilePtr h5file(new H5::H5File(filename, H5F_ACC_RDONLY), Hdf5FileCloser());
                 m_h5file_map[market + "_TRANS"] = h5file;
             }
 
         } catch (...) {
-            HKU_ERROR("Can't open h5file: {}", filename);
+            // HKU_ERROR("Can't open h5file: {}", filename);
         }
     }
 
@@ -213,7 +215,10 @@ bool H5KDataDriver::_getH5FileAndGroup(const string& market, const string& code,
         string key(format("{}_{}", market, kType));
         to_upper(key);
 
-        out_file = m_h5file_map[key];
+        auto iter = m_h5file_map.find(key);
+        HKU_IF_RETURN(iter == m_h5file_map.end(), false);
+
+        out_file = iter->second;
 
         if (!out_file) {
             return false;
@@ -272,7 +277,8 @@ bool H5KDataDriver::_getH5FileAndGroup(const string& market, const string& code,
     return true;
 }
 
-size_t H5KDataDriver::getCount(const string& market, const string& code, KQuery::KType kType) {
+size_t H5KDataDriver::getCount(const string& market, const string& code,
+                               const KQuery::KType& kType) {
     H5FilePtr h5file;
     H5::Group group;
     HKU_IF_RETURN(!_getH5FileAndGroup(market, code, kType, h5file, group), 0);
@@ -331,10 +337,10 @@ bool H5KDataDriver::_getBaseIndexRangeByDate(const string& market, const string&
 
     H5::DataSet dataset;
     H5::DataSpace dataspace;
-    uint64_t start_number = query.startDatetime().number();
-    uint64_t end_number = query.endDatetime().number();
     hsize_t startpos = 0, endpos = 0;
     try {
+        uint64_t start_number = query.startDatetime().number();
+        uint64_t end_number = query.endDatetime().number();
         string tablename(market + code);
         CHECK_DATASET_EXISTS_RET(group, tablename, false);
         dataset = group.openDataSet(tablename);
@@ -435,7 +441,8 @@ bool H5KDataDriver::_getOtherIndexRangeByDate(const string& market, const string
     assert(KQuery::WEEK == query.kType() || KQuery::MONTH == query.kType() ||
            KQuery::QUARTER == query.kType() || KQuery::HALFYEAR == query.kType() ||
            KQuery::YEAR == query.kType() || KQuery::MIN15 == query.kType() ||
-           KQuery::MIN30 == query.kType() || KQuery::MIN60 == query.kType() ||  KQuery::HOUR2 == query.kType());
+           KQuery::MIN30 == query.kType() || KQuery::MIN60 == query.kType() ||
+           KQuery::HOUR2 == query.kType());
     out_start = 0;
     out_end = 0;
     HKU_IF_RETURN(query.startDatetime() >= query.endDatetime(), false);
@@ -558,7 +565,7 @@ KRecordList H5KDataDriver::getKRecordList(const string& market, const string& co
 }
 
 KRecordList H5KDataDriver::_getBaseKRecordList(const string& market, const string& code,
-                                               KQuery::KType kType, size_t start_ix,
+                                               const KQuery::KType& kType, size_t start_ix,
                                                size_t end_ix) {
     KRecordList result;
     H5FilePtr h5file;
@@ -599,14 +606,14 @@ KRecordList H5KDataDriver::_getBaseKRecordList(const string& market, const strin
         HKU_WARN(e.what());
 
     } catch (...) {
-        //忽略
+        // 忽略
     }
 
     return result;
 }
 
 KRecordList H5KDataDriver::_getIndexKRecordList(const string& market, const string& code,
-                                                KQuery::KType kType, size_t start_ix,
+                                                const KQuery::KType& kType, size_t start_ix,
                                                 size_t end_ix) {
     KRecordList result;
     string tablename(format("{}{}", market, code));
@@ -678,7 +685,7 @@ KRecordList H5KDataDriver::_getIndexKRecordList(const string& market, const stri
         HKU_WARN("Invalid date! {}", e.what());
 
     } catch (...) {
-        //忽略
+        // 忽略
     }
 
     return result;
@@ -773,10 +780,10 @@ TimeLineList H5KDataDriver::_getTimeLine(const string& market, const string& cod
 
     H5::DataSet dataset;
     H5::DataSpace dataspace;
-    uint64_t start_number = start.number();
-    uint64_t end_number = end.number();
     hsize_t startpos = 0, endpos = 0;
     try {
+        uint64_t start_number = start.number();
+        uint64_t end_number = end.number();
         string tablename(market + code);
         CHECK_DATASET_EXISTS_RET(group, tablename, result);
         dataset = group.openDataSet(tablename);

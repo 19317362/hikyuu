@@ -25,8 +25,10 @@ ICval::ICval(double value, size_t discard) : IndicatorImp("CVAL", 1) {
 
 ICval::~ICval() {}
 
-bool ICval::check() {
-    return getParam<int>("discard") < 0 ? false : true;
+void ICval::_checkParam(const string& name) const {
+    if ("discard" == name) {
+        HKU_ASSERT(getParam<int>("discard") >= 0);
+    }
 }
 
 void ICval::_calculate(const Indicator& data) {
@@ -35,7 +37,7 @@ void ICval::_calculate(const Indicator& data) {
 
     size_t total = 0;
     if (isLeaf()) {
-        //叶子节点
+        // 叶子节点
         KData k = getContext();
         if (k.getStock().isNull()) {
             _readyBuffer(1, 1);
@@ -56,15 +58,16 @@ void ICval::_calculate(const Indicator& data) {
         _readyBuffer(total, 1);
 
     } else {
-        //非叶子节点
+        // 非叶子节点
         total = data.size();
         discard = data.discard() > discard ? data.discard() : discard;
     }
 
     m_discard = discard > total ? total : discard;
 
+    auto* dst = this->data();
     for (size_t i = m_discard; i < total; ++i) {
-        _set(value, i, 0);
+        dst[i] = value;
     }
 }
 

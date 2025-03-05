@@ -26,6 +26,9 @@ std::string HKU_API getVersion();
  */
 std::string HKU_API getVersionWithBuild();
 
+/* 获取包括Git commit信息的版本号 */
+std::string HKU_API getVersionWithGit();
+
 /**
  * 判断是否有更新的版本可以升级
  */
@@ -38,6 +41,27 @@ bool HKU_API CanUpgrade();
 std::string HKU_API getLatestVersion();
 
 /** 发送反馈信息 */
-void sendFeedback();
+void HKU_API sendFeedback();
+
+/** 用于发送 python 版本信息 */
+void HKU_API sendPythonVersionFeedBack(int major, int minor, int micro);
+
+/** 当前是否运行在 python 环境中 */
+bool HKU_API runningInPython();
+
+/** 当前是否运行在 Jupyter 环境中 */
+bool HKU_API pythonInJupyter();
+
+/** python 是否运行在交互模式下 */
+bool HKU_API pythonInInteractive();
+
+/** 设置是否运行在 python 下*/
+void HKU_API setRunningInPython(bool inpython);
+
+/** 设置 python 是否运行在交互模式下 */
+void HKU_API setPythonInInteractive(bool interactive);
+
+/** 当前是否运行在 Jupyter 环境中 */
+void HKU_API setPythonInJupyter(bool injupyter);
 
 }  // namespace hku

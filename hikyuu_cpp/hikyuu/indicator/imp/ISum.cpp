@@ -19,8 +19,10 @@ ISum::ISum() : IndicatorImp("SUM", 1) {
 
 ISum::~ISum() {}
 
-bool ISum::check() {
-    return getParam<int>("n") >= 0;
+void ISum::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
 }
 
 void ISum::_calculate(const Indicator& ind) {
@@ -30,28 +32,36 @@ void ISum::_calculate(const Indicator& ind) {
         return;
     }
 
+    auto const* src = ind.data();
+    auto* dst = this->data();
+
     int n = getParam<int>("n");
     if (n <= 0) {
         m_discard = ind.discard();
         price_t sum = 0;
         for (size_t i = m_discard; i < total; i++) {
-            sum += ind[i];
-            _set(sum, i);
+            sum += src[i];
+            dst[i] = sum;
         }
         return;
     }
 
     m_discard = ind.discard();
+    if (n == 1) {
+        memcpy(dst, src, total * sizeof(value_t));
+        return;
+    }
+
     price_t sum = 0.0;
     for (size_t i = m_discard, len = (m_discard + n) >= total ? total : m_discard + n; i < len;
          i++) {
-        sum += ind[i];
-        _set(sum, i);
+        sum += src[i];
+        dst[i] = sum;
     }
 
     for (size_t i = m_discard + n; i < total; i++) {
-        sum = sum - ind[i - n] + ind[i];
-        _set(sum, i);
+        sum = sum - src[i - n] + src[i];
+        dst[i] = sum;
     }
 
     return;

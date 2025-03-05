@@ -21,8 +21,8 @@ void export_PositionRecord(py::module& m) {
       .def(py::init<const Stock&, const Datetime&, const Datetime&, double, price_t, price_t,
                     double, price_t, price_t, price_t, price_t>())
 
-      .def("__str__", &PositionRecord::toString)
-      .def("__repr__", &PositionRecord::toString)
+      .def("__str__", &PositionRecord::str)
+      .def("__repr__", &PositionRecord::str)
 
       .def_readwrite("stock", &PositionRecord::stock, "交易对象（Stock）")
       .def_readwrite("take_datetime", &PositionRecord::takeDatetime, "初次建仓时刻（Datetime）")
@@ -35,7 +35,13 @@ void export_PositionRecord(py::module& m) {
       .def_readwrite("buy_money", &PositionRecord::buyMoney, "累计买入资金（float）")
       .def_readwrite("total_cost", &PositionRecord::totalCost, "累计交易总成本（float）")
       .def_readwrite("total_risk", &PositionRecord::totalRisk,
-                     "累计交易风险（float） = 各次 （买入价格-止损)*买入数量, 不包含交易成本")
+                     "累计交易风险 = 各次 （买入价格-止损)*买入数量, 不包含交易成本")
       .def_readwrite("sell_money", &PositionRecord::sellMoney, "累计卖出资金（float）")
+      .def_property_readonly("total_profit", &PositionRecord::totalProfit,
+                             R"(total_profit(self):
+
+    累计盈利 = 累计卖出资金 - 累计买入资金 - 累计交易成本
+    注意: 只对已清仓的记录有效, 未清仓的记录返回0  )")
+
         DEF_PICKLE(PositionRecord);
 }

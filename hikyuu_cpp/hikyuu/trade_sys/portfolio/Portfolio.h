@@ -12,12 +12,6 @@
 #include "../allocatefunds/AllocateFundsBase.h"
 #include "../selector/SelectorBase.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-#endif
-
 namespace hku {
 
 /*
@@ -25,7 +19,7 @@ namespace hku {
  * @ingroup Portfolio
  */
 class HKU_API Portfolio : public enable_shared_from_this<Portfolio> {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     /** 默认构造函数 */
@@ -35,15 +29,17 @@ public:
      * @brief 指定名称的构造函数
      * @param name 名称
      */
-    Portfolio(const string& name);
+    explicit Portfolio(const string& name);
 
     /**
      * @brief 构造函数
+     * @param name 组合名称
      * @param tm 账户
-     * @param st 选择器
+     * @param se 选择器
      * @param af 资产分配算法
      */
-    Portfolio(const TradeManagerPtr& tm, const SelectorPtr& st, const AFPtr& af);
+    Portfolio(const string& name, const TradeManagerPtr& tm, const SelectorPtr& se,
+              const AFPtr& af);
 
     /** 析构函数 */
     virtual ~Portfolio();
@@ -56,9 +52,7 @@ public:
 
     /**
      * @brief 运行资产组合
-     * @note
-     * 由于各个组件可能存在参数变化的情况，无法自动感知判断是否需要重新计算，此时需要手工指定强制计算
-     * @param query 查询条件
+     * @param query 查询条件, 其 KType 必须为 KQuery::DAY
      * @param force 是否强制重计算
      */
     void run(const KQuery& query, bool force = false);
@@ -87,48 +81,57 @@ public:
     /** 设置资产分配算法 */
     void setAF(const AFPtr& af);
 
+    const SystemList& getRealSystemList() const;
+
     /** 复位操作 */
     void reset();
 
-    typedef shared_ptr<Portfolio> PortfolioPtr;
-
     /** 克隆操作 */
-    PortfolioPtr clone();
+    typedef shared_ptr<Portfolio> PortfolioPtr;
+    PortfolioPtr clone() const;
 
-    /** 获取所有原型系统列表，与 SE 同 */
-    const SystemList& getProtoSystemList() const;
+    /** 运行前准备 */
+    void readyForRun();
 
-    /** 获取所有实际运行的系统列表，与 SE 同 */
-    const SystemList& getRealSystemList() const;
+    void runMoment(const Datetime& date, const Datetime& nextCycle, bool adjust);
+
+    /** 用于打印输出 */
+    virtual string str() const;
+
+    virtual void _reset() {}
+    virtual PortfolioPtr _clone() const {
+        return std::make_shared<Portfolio>();
+    }
+
+    virtual void _readyForRun() {}
+    virtual void _runMoment(const Datetime& date, const Datetime& nextCycle, bool adjust) {}
 
 private:
-    /** 运行前准备 */
-    bool _readyForRun();
+    void initParam();
 
-    void _runMoment(const Datetime& datetime);
-    void _runMomentOnOpen(const Datetime& datetime);
-    void _runMomentOnClose(const Datetime& datetime);
+    void _runOnMode(const DatetimeList& datelist, int adjust_cycle, const string& mode);
+
+    void _runOnModeDelayToTradingDay(const DatetimeList& datelist, int adjust_cycle,
+                                     const string& mode);
+
+protected:
+    // 跟踪打印当前TM持仓情况
+    void traceMomentTM(const Datetime& date);
 
 protected:
     string m_name;
     TMPtr m_tm;
-    TMPtr m_shadow_tm;
+    TMPtr m_cash_tm;  // 仅仅负责内部资金的管理（即只需要 checkout 到子账号, 从账户checkin现金）
     SEPtr m_se;
     AFPtr m_af;
 
-    KQuery m_query;              // 关联的查询条件
-    bool m_is_ready;             // 是否已做好运行准备
-    bool m_need_calculate;       // 是否需要计算标志
+    KQuery m_query;         // 关联的查询条件
+    bool m_need_calculate;  // 是否需要计算标志
 
-    SystemList m_pro_sys_list;   // 所有原型系统列表，来自 SE
     SystemList m_real_sys_list;  // 所有实际运行的子系统列表
 
     // 用于中间计算的临时数据
-    std::unordered_set<System*> m_running_sys_set;  // 当前仍在运行的子系统集合
-    std::list<SYSPtr> m_running_sys_list;           // 当前仍在运行的子系统列表
-    SystemList m_tmp_selected_list_on_open;
-    SystemList m_tmp_selected_list_on_close;
-    SystemList m_tmp_will_remove_sys;
+    std::unordered_set<SYSPtr> m_running_sys_set;
 
 //============================================
 // 序列化支持
@@ -141,12 +144,10 @@ private:
         ar& BOOST_SERIALIZATION_NVP(m_name);
         ar& BOOST_SERIALIZATION_NVP(m_params);
         ar& BOOST_SERIALIZATION_NVP(m_tm);
-        ar& BOOST_SERIALIZATION_NVP(m_shadow_tm);
+        ar& BOOST_SERIALIZATION_NVP(m_cash_tm);
         ar& BOOST_SERIALIZATION_NVP(m_se);
         ar& BOOST_SERIALIZATION_NVP(m_af);
         ar& BOOST_SERIALIZATION_NVP(m_query);
-        ar& BOOST_SERIALIZATION_NVP(m_is_ready);
-        ar& BOOST_SERIALIZATION_NVP(m_need_calculate);
     }
 
     template <class Archive>
@@ -154,17 +155,24 @@ private:
         ar& BOOST_SERIALIZATION_NVP(m_name);
         ar& BOOST_SERIALIZATION_NVP(m_params);
         ar& BOOST_SERIALIZATION_NVP(m_tm);
-        ar& BOOST_SERIALIZATION_NVP(m_shadow_tm);
+        ar& BOOST_SERIALIZATION_NVP(m_cash_tm);
         ar& BOOST_SERIALIZATION_NVP(m_se);
         ar& BOOST_SERIALIZATION_NVP(m_af);
         ar& BOOST_SERIALIZATION_NVP(m_query);
-        ar& BOOST_SERIALIZATION_NVP(m_is_ready);
-        ar& BOOST_SERIALIZATION_NVP(m_need_calculate);
     }
 
     BOOST_SERIALIZATION_SPLIT_MEMBER()
 #endif /* HKU_SUPPORT_SERIALIZATION */
 };
+
+#define PORTFOLIO_IMP(classname)                   \
+public:                                            \
+    virtual PortfolioPtr _clone() const override { \
+        return std::make_shared<classname>();      \
+    }                                              \
+    virtual void _reset() override;                \
+    virtual void _readyForRun() override;          \
+    virtual void _runMoment(const Datetime& date, const Datetime& nextCycle, bool adjust) override;
 
 /**
  * 客户程序都应使用该指针类型
@@ -226,10 +234,6 @@ inline void Portfolio::setAF(const AFPtr& af) {
         m_af = af;
         m_need_calculate = true;
     }
-}
-
-inline const SystemList& Portfolio::getProtoSystemList() const {
-    return m_pro_sys_list;
 }
 
 inline const SystemList& Portfolio::getRealSystemList() const {

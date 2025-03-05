@@ -31,8 +31,10 @@ string TradeManager::str() const {
        << "  params: " << getParameter() << strip << "  name: " << name() << strip
        << "  init_date: " << initDatetime() << strip << "  init_cash: " << initCash() << strip
        << "  firstDatetime: " << firstDatetime() << strip << "  lastDatetime: " << lastDatetime()
-       << strip << "  TradeCostFunc: " << costFunc() << strip << "  current cash: " << currentCash()
-       << strip << "  current market_value: " << funds.market_value << strip
+       << strip << "  TradeCostFunc: " << costFunc() << strip << "  current total funds: "
+       << funds.cash + funds.market_value + funds.borrow_asset - funds.short_market_value << strip
+       << "  current cash: " << currentCash() << strip
+       << "  current market_value: " << funds.market_value << strip
        << "  current short_market_value: " << funds.short_market_value << strip
        << "  current base_cash: " << funds.base_cash << strip
        << "  current base_asset: " << funds.base_asset << strip
@@ -126,15 +128,10 @@ void TradeManager::_reset() {
 }
 
 TradeManagerPtr TradeManager::_clone() {
-    TradeManager* p = new TradeManager(m_init_datetime, m_init_cash, m_costfunc, m_name);
-    p->m_params = m_params;
-    p->m_name = m_name;
+    auto p = make_shared<TradeManager>(m_init_datetime, m_init_cash, m_costfunc, m_name);
     p->m_init_datetime = m_init_datetime;
     p->m_init_cash = m_init_cash;
     p->m_last_update_datetime = m_last_update_datetime;
-
-    // costfunc是一个公共的函数对象，是共享实现，无须deepcopy
-    p->m_costfunc = m_costfunc;
 
     p->m_cash = m_cash;
     p->m_checkin_cash = m_checkin_cash;
@@ -147,12 +144,8 @@ TradeManagerPtr TradeManager::_clone() {
     p->m_trade_list = m_trade_list;
     p->m_position = m_position;
     p->m_position_history = m_position_history;
-    p->m_broker_list = m_broker_list;
-    p->m_broker_last_datetime = m_broker_last_datetime;
-
     p->m_actions = m_actions;
-
-    return TradeManagerPtr(p);
+    return p;
 }
 
 double TradeManager::getMarginRate(const Datetime& datetime, const Stock& stock) {
@@ -372,8 +365,7 @@ PositionRecord TradeManager::getPosition(const Datetime& datetime, const Stock& 
 
     // 在历史交易记录中，重新计算在指定的查询日期时，该交易对象的持仓数量
     double number = 0.0;
-    TradeRecordList::const_iterator iter = m_trade_list.begin();
-    for (; iter != m_trade_list.end(); ++iter) {
+    for (auto iter = m_trade_list.begin(); iter != m_trade_list.end(); ++iter) {
         // 交易记录中的交易日期已经大于查询日期，则跳出循环
         if (iter->datetime > datetime) {
             break;
@@ -454,11 +446,12 @@ bool TradeManager::checkout(const Datetime& datetime, price_t cash) {
 
     int precision = getParam<int>("precision");
     price_t out_cash = roundEx(cash, precision);
-    HKU_ERROR_IF_RETURN(out_cash > m_cash, false,
-                        "{} cash({:<.4f}) must be <= current cash({:<.4f})!", datetime, cash,
-                        m_cash);
 
-    m_cash = roundEx(m_cash - out_cash, precision);
+    price_t tmp_cash = roundEx(m_cash - out_cash, precision);
+    HKU_ERROR_IF_RETURN(tmp_cash < 0.0, false, "{} cash({:<.4f}) must be <= current cash({:<.4f})!",
+                        datetime, cash, m_cash);
+
+    m_cash = tmp_cash;
     m_checkout_cash = roundEx(m_checkout_cash + out_cash, precision);
     m_trade_list.push_back(TradeRecord(Null<Stock>(), datetime, BUSINESS_CHECKOUT, out_cash,
                                        out_cash, 0.0, 0, CostRecord(), 0.0, m_cash, PART_INVALID));
@@ -864,14 +857,14 @@ TradeRecord TradeManager::buy(const Datetime& datetime, const Stock& stock, pric
           roundEx(position.totalRisk + (realPrice - stoploss) * number * stock.unit(), precision);
     }
 
-    if (result.datetime > m_broker_last_datetime) {
+    if (datetime > m_broker_last_datetime) {
         list<OrderBrokerPtr>::const_iterator broker_iter = m_broker_list.begin();
-        Datetime realtime, nulltime;
         for (; broker_iter != m_broker_list.end(); ++broker_iter) {
-            realtime =
-              (*broker_iter)->buy(datetime, stock.market(), stock.code(), realPrice, number);
-            if (realtime != nulltime && realtime > m_broker_last_datetime) {
-                m_broker_last_datetime = realtime;
+            (*broker_iter)
+              ->buy(datetime, stock.market(), stock.code(), realPrice, number, stoploss, goalPrice,
+                    from);
+            if (datetime > m_broker_last_datetime) {
+                m_broker_last_datetime = datetime;
             }
         }
     }
@@ -904,9 +897,9 @@ TradeRecord TradeManager::sell(const Datetime& datetime, const Stock& stock, pri
 
     // 未持仓
     position_map_type::iterator pos_iter = m_position.find(stock.id());
-    HKU_WARN_IF_RETURN(pos_iter == m_position.end(), result,
-                       "{} {} This stock was not bought never! ({}, {:<.4f}, {}, {})", datetime,
-                       stock.market_code(), datetime, realPrice, number, int(from));
+    HKU_TRACE_IF_RETURN(pos_iter == m_position.end(), result,
+                        "{} {} This stock was not bought never! ({}, {:<.4f}, {}, {})", datetime,
+                        stock.market_code(), datetime, realPrice, number, getSystemPartName(from));
 
     // 根据权息调整当前持仓情况
     updateWithWeight(datetime);
@@ -954,14 +947,14 @@ TradeRecord TradeManager::sell(const Datetime& datetime, const Stock& stock, pri
         returnCash(datetime, m_borrow_cash < m_cash ? m_borrow_cash : m_cash);
     }
 
-    if (result.datetime > m_broker_last_datetime) {
+    if (datetime > m_broker_last_datetime) {
         list<OrderBrokerPtr>::const_iterator broker_iter = m_broker_list.begin();
-        Datetime realtime, nulltime;
         for (; broker_iter != m_broker_list.end(); ++broker_iter) {
-            realtime =
-              (*broker_iter)->sell(datetime, stock.market(), stock.code(), realPrice, real_number);
-            if (realtime != nulltime && realtime > m_broker_last_datetime) {
-                m_broker_last_datetime = realtime;
+            (*broker_iter)
+              ->sell(datetime, stock.market(), stock.code(), realPrice, real_number, stoploss,
+                     goalPrice, from);
+            if (datetime > m_broker_last_datetime) {
+                m_broker_last_datetime = datetime;
             }
         }
     }
@@ -1069,14 +1062,14 @@ TradeRecord TradeManager::sellShort(const Datetime& datetime, const Stock& stock
         position.sellMoney = roundEx(position.sellMoney + money, precision);
     }
 
-    if (result.datetime > m_broker_last_datetime) {
+    if (datetime > m_broker_last_datetime) {
         list<OrderBrokerPtr>::const_iterator broker_iter = m_broker_list.begin();
-        Datetime realtime, nulltime;
         for (; broker_iter != m_broker_list.end(); ++broker_iter) {
-            realtime =
-              (*broker_iter)->sell(datetime, stock.market(), stock.code(), realPrice, number);
-            if (realtime != nulltime && realtime > m_broker_last_datetime) {
-                m_broker_last_datetime = realtime;
+            (*broker_iter)
+              ->sell(datetime, stock.market(), stock.code(), realPrice, number, stoploss, goalPrice,
+                     from);
+            if (datetime > m_broker_last_datetime) {
+                m_broker_last_datetime = datetime;
             }
         }
     }
@@ -1143,14 +1136,14 @@ TradeRecord TradeManager::buyShort(const Datetime& datetime, const Stock& stock,
         m_short_position.erase(stock.id());
     }
 
-    if (result.datetime > m_broker_last_datetime) {
+    if (datetime > m_broker_last_datetime) {
         list<OrderBrokerPtr>::const_iterator broker_iter = m_broker_list.begin();
-        Datetime realtime, nulltime;
         for (; broker_iter != m_broker_list.end(); ++broker_iter) {
-            realtime =
-              (*broker_iter)->buy(datetime, stock.market(), stock.code(), realPrice, number);
-            if (realtime != nulltime && realtime > m_broker_last_datetime) {
-                m_broker_last_datetime = realtime;
+            (*broker_iter)
+              ->buy(datetime, stock.market(), stock.code(), realPrice, number, stoploss, goalPrice,
+                    from);
+            if (datetime > m_broker_last_datetime) {
+                m_broker_last_datetime = datetime;
             }
         }
     }
@@ -1186,12 +1179,11 @@ FundsRecord TradeManager::getFunds(KQuery::KType inktype) const {
     string ktype(inktype);
     to_upper(ktype);
 
-    price_t price(0.0);
-    price_t value(0.0);  // 当前市值
+    price_t value{0.0};  // 当前市值
     position_map_type::const_iterator iter = m_position.begin();
     for (; iter != m_position.end(); ++iter) {
         const PositionRecord& record = iter->second;
-        price = record.stock.getMarketValue(lastDatetime(), ktype);
+        auto price = record.stock.getMarketValue(lastDatetime(), ktype);
         value = roundEx((value + record.number * price * record.stock.unit()), precision);
     }
 
@@ -1199,7 +1191,7 @@ FundsRecord TradeManager::getFunds(KQuery::KType inktype) const {
     iter = m_short_position.begin();
     for (; iter != m_short_position.end(); ++iter) {
         const PositionRecord& record = iter->second;
-        price = record.stock.getMarketValue(lastDatetime(), ktype);
+        auto price = record.stock.getMarketValue(lastDatetime(), ktype);
         short_value =
           roundEx((short_value + record.number * price * record.stock.unit()), precision);
     }
@@ -1471,40 +1463,6 @@ FundsRecord TradeManager::getFunds(const Datetime& indatetime, KQuery::KType kty
     return funds;
 }
 
-PriceList TradeManager::getFundsCurve(const DatetimeList& dates, KQuery::KType ktype) {
-    size_t total = dates.size();
-    PriceList result(total);
-    int precision = getParam<int>("precision");
-    for (size_t i = 0; i < total; ++i) {
-        FundsRecord funds = getFunds(dates[i], ktype);
-        result[i] = roundEx(
-          funds.cash + funds.market_value - funds.borrow_cash - funds.borrow_asset, precision);
-    }
-    return result;
-}
-
-PriceList TradeManager::getProfitCurve(const DatetimeList& dates, KQuery::KType ktype) {
-    size_t total = dates.size();
-    PriceList result(total);
-    if (total == 0)
-        return result;
-
-    size_t i = 0;
-    while (i < total && dates[i] < m_init_datetime) {
-        result[i] = 0;
-        i++;
-    }
-    int precision = getParam<int>("precision");
-    for (; i < total; ++i) {
-        FundsRecord funds = getFunds(dates[i], ktype);
-        result[i] = roundEx(funds.cash + funds.market_value - funds.borrow_cash -
-                              funds.borrow_asset - funds.base_cash - funds.base_asset,
-                            precision);
-    }
-
-    return result;
-}
-
 /******************************************************************************
  *  每次执行交易操作时，先根据权息信息调整持有仓位及现金记录
  *  采用滞后更新的策略，即只在需要获取当前持仓情况及卖出时更新当前的持仓及资产情况
@@ -1519,8 +1477,6 @@ void TradeManager::updateWithWeight(const Datetime& datetime) {
     Datetime end_date(datetime.date() + bd::days(1));
 
     int precision = getParam<int>("precision");
-    price_t total_bonus = 0.0;
-    price_t last_cash = m_cash;
     TradeRecordList new_trade_buffer;
 
     // 更新持仓信息，并缓存新增的交易记录
@@ -1542,8 +1498,6 @@ void TradeManager::updateWithWeight(const Datetime& datetime) {
             if (weight_iter->bonus() != 0.0) {
                 price_t bonus = roundEx(position.number * weight_iter->bonus() * 0.1, precision);
                 position.sellMoney += bonus;
-                last_cash += bonus;
-                total_bonus += bonus;
                 m_cash += bonus;
 
                 TradeRecord record(stock, weight_iter->datetime(), BUSINESS_BONUS, bonus, bonus,
@@ -1551,7 +1505,7 @@ void TradeManager::updateWithWeight(const Datetime& datetime) {
                 new_trade_buffer.push_back(record);
             }
 
-            size_t addcount =
+            price_t addcount =
               (position.number / 10.0) * (weight_iter->countAsGift() + weight_iter->increasement());
             if (addcount != 0.0) {
                 position.number += addcount;
@@ -1561,7 +1515,7 @@ void TradeManager::updateWithWeight(const Datetime& datetime) {
                 new_trade_buffer.push_back(record);
             }
         } /* for weight */
-    }     /* for position */
+    } /* for position */
 
     std::sort(
       new_trade_buffer.begin(), new_trade_buffer.end(),
@@ -1593,10 +1547,13 @@ void TradeManager::_saveAction(const TradeRecord& record) {
     switch (record.business) {
         case BUSINESS_INIT:
             buf << "my_tm = crtTM(datetime=Datetime('" << record.datetime.str() << "'), "
-                << "initCash=" << record.cash << sep << "costFunc=" << m_costfunc->name() << "("
-                << m_costfunc->getParameter().getNameValueList() << "), "
-                << "name='" << m_name << "'"
-                << ")";
+                << "initCash=" << record.cash << sep << "costFunc=";
+            if (m_costfunc) {
+                buf << m_costfunc->name() << "(" << m_costfunc->getParameter().getNameValueList()
+                    << "), " << "name='" << m_name << "'" << ")";
+            } else {
+                buf << "TC_Zero()";
+            }
             break;
 
         case BUSINESS_CHECKIN:
@@ -1610,17 +1567,17 @@ void TradeManager::_saveAction(const TradeRecord& record) {
             break;
 
         case BUSINESS_BUY:
-            buf << my_tm << "buy(Datetime('" << record.datetime.str() << "'), "
-                << "sm['" << record.stock.market_code() << "'], " << record.realPrice << sep
-                << record.number << sep << record.stoploss << sep << record.goalPrice << sep
-                << record.planPrice << sep << record.from << ")";
+            buf << my_tm << "buy(Datetime('" << record.datetime.str() << "'), " << "sm['"
+                << record.stock.market_code() << "'], " << record.realPrice << sep << record.number
+                << sep << record.stoploss << sep << record.goalPrice << sep << record.planPrice
+                << sep << record.from << ")";
             break;
 
         case BUSINESS_SELL:
-            buf << my_tm << "sell(Datetime('" << record.datetime.str() << "'),"
-                << "sm['" << record.stock.market_code() << "'], " << record.realPrice << sep
-                << record.number << sep << record.stoploss << sep << record.goalPrice << sep
-                << record.planPrice << sep << record.from << ")";
+            buf << my_tm << "sell(Datetime('" << record.datetime.str() << "')," << "sm['"
+                << record.stock.market_code() << "'], " << record.realPrice << sep << record.number
+                << sep << record.stoploss << sep << record.goalPrice << sep << record.planPrice
+                << sep << record.from << ")";
             break;
 
         default:
@@ -1674,7 +1631,8 @@ void TradeManager::tocsv(const string& path) {
                  << record.number << sep << record.cost.commission << sep << record.cost.stamptax
                  << sep << record.cost.transferfee << sep << record.cost.others << sep
                  << record.cost.total << sep << record.stoploss << sep << record.cash << sep
-                 << getSystemPartName(record.from) << std::endl;
+                 << getSystemPartName(record.from) << sep << sep << sep << sep << sep << sep << sep
+                 << std::endl;
         } else {
             file << record.datetime << sep << record.stock.market_code() << sep
                  << record.stock.name() << sep << getBusinessName(record.business) << sep
@@ -1689,7 +1647,11 @@ void TradeManager::tocsv(const string& path) {
                     file << kdata.datetime << sep << kdata.openPrice << sep << kdata.highPrice
                          << sep << kdata.lowPrice << sep << kdata.closePrice << sep
                          << kdata.transAmount << sep << kdata.transCount;
+                } else {
+                    file << sep << sep << sep << sep << sep << sep << sep;
                 }
+            } else {
+                file << sep << sep << sep << sep << sep << sep;
             }
             file << std::endl;
         }
@@ -1746,6 +1708,26 @@ void TradeManager::tocsv(const string& path) {
         file << *action_iter << std::endl;
     }
     file.close();
+}
+
+bool TradeManager::addPosition(const PositionRecord& pr) {
+    HKU_ERROR_IF_RETURN(pr.stock.isNull(), false, "Invalid postion record! stock is null!");
+    HKU_ERROR_IF_RETURN(pr.cleanDatetime != Null<Datetime>(), false,
+                        "Position cleanDatetime({}) must be Null!", pr.cleanDatetime);
+    HKU_ERROR_IF_RETURN(pr.takeDatetime < initDatetime(), false,
+                        "Poistion takeDatetime({}) > initDatetime({})", pr.takeDatetime,
+                        initDatetime());
+    HKU_ERROR_IF_RETURN(!m_trade_list.empty(), false, "Exist trade list!");
+
+    auto iter = m_position.find(pr.stock.id());
+    HKU_ERROR_IF_RETURN(iter != m_position.end(), false, "The stock({}) has position!",
+                        pr.stock.market_code());
+
+    m_position[pr.stock.id()] = pr;
+    if (pr.takeDatetime > m_init_datetime) {
+        m_init_datetime = pr.takeDatetime;
+    }
+    return true;
 }
 
 bool TradeManager::addTradeRecord(const TradeRecord& tr) {
@@ -1832,7 +1814,8 @@ bool TradeManager::_add_buy_tr(const TradeRecord& tr) {
     price_t money = roundEx(tr.realPrice * tr.number * tr.stock.unit(), precision);
 
     HKU_WARN_IF_RETURN(m_cash < roundEx(money + tr.cost.total, precision), false,
-                       "Don't have enough money!");
+                       "Don't have enough money! {} < {}, {}", m_cash,
+                       roundEx(money + tr.cost.total, precision), tr);
 
     m_cash = roundEx(m_cash - money - tr.cost.total, precision);
     new_tr.cash = m_cash;

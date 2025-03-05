@@ -65,7 +65,7 @@ HKU_API std::ostream& operator<<(std::ostream& os, const PositionRecord& record)
     return os;
 }
 
-string PositionRecord::toString() const {
+string PositionRecord::str() const {
     int precision = 2;
     std::string market(""), code(""), name("");
     if (!stock.isNull()) {
@@ -92,6 +92,14 @@ string PositionRecord::toString() const {
     os.unsetf(std::ostream::floatfield);
     os.precision();
     return os.str();
+}
+
+price_t PositionRecord::totalProfit() const {
+    if (cleanDatetime == Null<Datetime>()) {
+        HKU_ERROR("The profit cannot be calculated without cleaned records!");
+        return 0.0;
+    }
+    return buyMoney - totalCost - sellMoney;
 }
 
 bool HKU_API operator==(const PositionRecord& d1, const PositionRecord& d2) {

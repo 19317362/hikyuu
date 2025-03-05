@@ -5,13 +5,15 @@
  *      Author: fasiondog
  */
 
+#pragma once
 #ifndef STOCKMANAGER_H_
 #define STOCKMANAGER_H_
 
 #include <mutex>
 #include <thread>
-#include "utilities/Parameter.h"
-#include "data_driver/DataDriverFactory.h"
+#include "hikyuu/utilities/Parameter.h"
+#include "hikyuu/utilities/thread/thread.h"
+#include "hikyuu/data_driver/DataDriverFactory.h"
 #include "Block.h"
 #include "MarketInfo.h"
 #include "StockTypeInfo.h"
@@ -20,9 +22,6 @@
 namespace hku {
 
 typedef vector<string> MarketList;
-
-Parameter default_preload_param();
-Parameter default_other_param();
 
 /**
  * 证券信息统一管理类
@@ -34,6 +33,9 @@ public:
     static StockManager& instance();
     virtual ~StockManager();
 
+    StockManager(const StockManager&) = delete;
+    StockManager& operator=(const StockManager&) = delete;
+
     /**
      * 初始化函数，必须在程序入口调用
      * @param baseInfoParam 基础信息驱动参数
@@ -44,8 +46,8 @@ public:
      * @param context 策略上下文
      */
     void init(const Parameter& baseInfoParam, const Parameter& blockParam,
-              const Parameter& kdataParam, const Parameter& preloadParam = default_preload_param(),
-              const Parameter& hikyuuParam = default_other_param(),
+              const Parameter& kdataParam, const Parameter& preloadParam,
+              const Parameter& hikyuuParam,
               const StrategyContext& context = StrategyContext({"all"}));
 
     /** 重新加载 */
@@ -87,6 +89,9 @@ public:
     /** 获取证券数量 */
     size_t size() const;
 
+    /** 是否所有数据准备完毕 */
+    bool dataReady() const;
+
     /**
      * 根据"市场简称证券代码"获取对应的证券实例
      * @param querystr 格式：“市场简称证券代码”，如"sh000001"
@@ -96,6 +101,9 @@ public:
 
     /** 同 getStock @see getStock */
     Stock operator[](const string&) const;
+
+    StockList getStockList(
+      std::function<bool(const Stock&)>&& filter = std::function<bool(const Stock&)>()) const;
 
     /**
      * 获取相应的市场信息
@@ -122,6 +130,16 @@ public:
      */
     Block getBlock(const string& category, const string& name);
 
+    void addBlock(const Block& blk) {
+        saveBlock(blk);
+    }
+
+    void saveBlock(const Block& blk);
+    void removeBlock(const string& category, const string& name);
+    void removeBlock(const Block& blk) {
+        removeBlock(blk.category(), blk.name());
+    }
+
     /**
      * 获取指定分类的板块列表
      * @param category 板块分类
@@ -135,8 +153,26 @@ public:
      */
     BlockList getBlockList();
 
-    // 目前支持"SH"
+    /**
+     * 获取指定证券所属的板块列表
+     * @param stk 指定证券
+     * @param category 板块分类，如果为空字符串，返回所有板块分类下的所属板块
+     * @return BlockList
+     */
+    BlockList getStockBelongs(const Stock& stk, const string& category);
+
+    /**
+     * 获取交易日历，目前支持"SH"
+     * @param query
+     * @param market
+     * @return DatetimeList
+     */
     DatetimeList getTradingCalendar(const KQuery& query, const string& market = "SH");
+
+    /**
+     * 获取10年期中国国债收益率
+     */
+    const ZhBond10List& getZhBond10() const;
 
     /**
      * 判断指定日期是否为节假日
@@ -144,12 +180,24 @@ public:
      */
     bool isHoliday(const Datetime& d) const;
 
+    const string& getHistoryFinanceFieldName(size_t ix) const;
+    size_t getHistoryFinanceFieldIndex(const string& name) const;
+    vector<std::pair<size_t, string>> getHistoryFinanceAllFields() const;
+
+    vector<HistoryFinanceInfo> getHistoryFinance(const Stock& stk, Datetime start, Datetime end);
+
     /**
      * 添加Stock，仅供临时增加的特殊Stock使用
      * @param stock
      * @return true 成功 | false 失败
      */
     bool addStock(const Stock& stock);
+
+    /**
+     * 从 StockManager 中移除相应的 Stock，一般用于将临时增加的 Stock 从 sm 中移除
+     * @param market_code
+     */
+    void removeStock(const string& market_code);
 
     /**
      * 从CSV文件（K线数据）增加临时的Stock，可用于只有CSV格式的K线数据时，进行临时测试
@@ -182,6 +230,11 @@ public:
         return m_thread_id;
     }
 
+    /** 仅由程序退出使使用！！！ */
+    ThreadPool* getLoadTaskGroup() {
+        return m_load_tg.get();
+    }
+
 public:
     typedef StockMapIterator const_iterator;
     const_iterator begin() const {
@@ -192,8 +245,8 @@ public:
     }
 
 private:
-    /* 设置K线驱动 */
-    void setKDataDriver(const KDataDriverConnectPoolPtr&);
+    /* 加载全部数据 */
+    void loadData();
 
     /* 加载 K线数据至缓存 */
     void loadAllKData();
@@ -213,31 +266,43 @@ private:
     /* 加载所有权息数据 */
     void loadAllStockWeights();
 
+    /** 加载10年期中国国债收益率数据 */
+    void loadAllZhBond10();
+
+    /** 加载历史财经字段索引 */
+    void loadHistoryFinanceField();
+
 private:
     StockManager();
 
 private:
     static StockManager* m_sm;
-    bool m_initializing;
-    std::thread::id m_thread_id;  // 记录线程id，用于判断Stratege是以独立进程方式还是线程方式运行
+    std::atomic_bool m_initializing;
+    std::atomic_bool m_data_ready;  // 用于指示是否所有数据准备完毕
+    std::thread::id m_thread_id;    // 记录线程id，用于判断Stratege是以独立进程方式还是线程方式运行
     string m_tmpdir;
     string m_datadir;
     BaseInfoDriverPtr m_baseInfoDriver;
     BlockInfoDriverPtr m_blockDriver;
 
     StockMapIterator::stock_map_t m_stockDict;  // SH000001 -> stock
-    std::mutex* m_stockDict_mutex;
+    std::shared_mutex* m_stockDict_mutex;
 
     typedef unordered_map<string, MarketInfo> MarketInfoMap;
     mutable MarketInfoMap m_marketInfoDict;
-    std::mutex* m_marketInfoDict_mutex;
+    std::shared_mutex* m_marketInfoDict_mutex;
 
     typedef unordered_map<uint32_t, StockTypeInfo> StockTypeInfoMap;
     mutable StockTypeInfoMap m_stockTypeInfo;
-    std::mutex* m_stockTypeInfo_mutex;
+    std::shared_mutex* m_stockTypeInfo_mutex;
 
     std::unordered_set<Datetime> m_holidays;  // 节假日
-    std::mutex* m_holidays_mutex;
+    std::shared_mutex* m_holidays_mutex;
+
+    ZhBond10List m_zh_bond10;  // 10年期中国国债收益率数据
+
+    unordered_map<string, size_t> m_field_name_to_ix;  // 财经字段名称到字段索引映射
+    unordered_map<size_t, string> m_field_ix_to_name;  // 财经字段索引到字段名称映射
 
     Parameter m_baseInfoDriverParam;
     Parameter m_blockDriverParam;
@@ -245,18 +310,20 @@ private:
     Parameter m_preloadParam;
     Parameter m_hikyuuParam;
     StrategyContext m_context;
+
+    std::unique_ptr<ThreadPool> m_load_tg;  // 异步数据加载辅助线程组
 };
 
 inline size_t StockManager::size() const {
     return m_stockDict.size();
 }
 
-inline Stock StockManager::operator[](const string& query) const {
-    return getStock(query);
+inline bool StockManager::dataReady() const {
+    return m_data_ready;
 }
 
-inline bool StockManager::isHoliday(const Datetime& d) const {
-    return m_holidays.count(d);
+inline Stock StockManager::operator[](const string& query) const {
+    return getStock(query);
 }
 
 inline const Parameter& StockManager::getBaseInfoDriverParameter() const {
@@ -285,6 +352,19 @@ inline const StrategyContext& StockManager::getStrategyContext() const {
 
 inline BaseInfoDriverPtr StockManager::getBaseInfoDriver() const {
     return m_baseInfoDriver;
+}
+
+inline const string& StockManager::getHistoryFinanceFieldName(size_t ix) const {
+    return m_field_ix_to_name.at(ix);
+}
+
+inline size_t StockManager::getHistoryFinanceFieldIndex(const string& name) const {
+    return m_field_name_to_ix.at(name);
+}
+
+inline vector<HistoryFinanceInfo> StockManager::getHistoryFinance(const Stock& stk, Datetime start,
+                                                                  Datetime end) {
+    return m_baseInfoDriver->getHistoryFinance(stk.market(), stk.code(), start, end);
 }
 
 }  // namespace hku

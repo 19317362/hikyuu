@@ -8,11 +8,15 @@ import datetime
 import multiprocessing
 from configparser import ConfigParser
 from logging.handlers import QueueListener
+
+# 优先加载，处理 VS 17.10 升级后依赖 dll 不兼容问题
+import hikyuu
+
 import PyQt5
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt5.QtCore import pyqtSlot, QObject, pyqtSignal
-from PyQt5.QtGui import QIcon, QTextCursor, QFont
+from PyQt5.QtGui import QIcon, QTextCursor, QFont, QPalette
 
 import mysql.connector
 from mysql.connector import errorcode
@@ -29,6 +33,7 @@ from hikyuu.gui.data.CollectSpotThread import CollectSpotThread
 from hikyuu.gui.data.SchedImportThread import SchedImportThread
 from hikyuu.gui.spot_server import release_nng_senders
 
+from hikyuu import can_upgrade, get_last_version
 from hikyuu.data import hku_config_template
 from hikyuu.util import *
 
@@ -45,11 +50,12 @@ class EmittingStream(QObject):
 
 
 class MyMainWindow(QMainWindow, Ui_MainWindow):
-    def __init__(self, parent=None, capture_output=False, use_dark_style=False):
+    def __init__(self, parent=None, capture_output=False):
         super(MyMainWindow, self).__init__(parent)
         self._capture_output = capture_output  # 捕获Python stdout 输出
-        self._use_dark_style = use_dark_style  # 使用暗黑主题
-        self._text_color = '#FFFFFF' if use_dark_style else '#000000'
+        palette = QApplication.instance().palette()
+        # 获取文字默认颜色
+        self._text_color = palette.color(QPalette.WindowText).name()
         self.setupUi(self)
         self.initUI()
         self.initLogger()
@@ -76,7 +82,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.hdf5_import_thread.stop()
         if self.escape_time_thread:
             self.escape_time_thread.stop()
-        self.mp_log_q_lisener.stop()
+        if hasattr(self, 'mp_log_q_lisener'):
+            self.mp_log_q_lisener.stop()
         event.accept()
 
     def getUserConfigDir(self):
@@ -230,8 +237,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         for name in logging.Logger.manager.loggerDict.keys():
             logger = logging.getLogger(name)
             logger.addHandler(self.log_handler)
-            logger.setLevel(logging.DEBUG)
-            # logger.setLevel(logging.INFO)
+            # logger.setLevel(logging.DEBUG)
+            logger.setLevel(logging.INFO)
 
         # 多进程日志队列
         self.mp_log_q = multiprocessing.Queue()
@@ -239,6 +246,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.mp_log_q_lisener.start()
 
     def initUI(self):
+        # 读取配置文件放在 output 重定向之前，防止配置文件读取失败没有提示
+        # 读取保存的配置文件信息，如果不存在，则使用默认配置
+        this_dir = self.getUserConfigDir()
+        import_config = ConfigParser()
+        if os.path.exists(this_dir + '/importdata-gui.ini'):
+            import_config.read(this_dir + '/importdata-gui.ini', encoding='utf-8')
+
         self._is_sched_import_running = False
         self._is_collect_running = False
         self._stream = None
@@ -253,9 +267,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.log_textEdit.document().setMaximumBlockCount(1000)
 
         current_dir = os.path.dirname(__file__)
-        self.setWindowIcon(QIcon("{}/hikyuu.ico".format(current_dir)))
-        # self.setFixedSize(self.width(), self.height())
-        self.import_status_label.setText('')
+        icon = QIcon(f"{current_dir}/hikyuu_small.png")
+        self.setWindowIcon(icon)
+        QApplication.instance().setWindowIcon(icon)
         self.import_detail_textEdit.clear()
         self.reset_progress_bar()
         self.day_start_dateEdit.setMinimumDate(datetime.date(1990, 12, 19))
@@ -270,12 +284,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.trans_start_dateEdit.setMinimumDate(today - datetime.timedelta(90))
         self.time_start_dateEdit.setMinimumDate(today - datetime.timedelta(300))
         self.collect_status_label.setText("已停止")
-
-        # 读取保存的配置文件信息，如果不存在，则使用默认配置
-        this_dir = self.getUserConfigDir()
-        import_config = ConfigParser()
-        if os.path.exists(this_dir + '/importdata-gui.ini'):
-            import_config.read(this_dir + '/importdata-gui.ini', encoding='utf-8')
 
         # 初始化导入行情数据类型配置
         self.import_stock_checkBox.setChecked(import_config.getboolean('quotation', 'stock', fallback=True))
@@ -624,6 +632,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 self.escape_time_thread = None
                 self.start_import_pushButton.setEnabled(True)
                 self.import_detail_textEdit.append("导入完毕！")
+                self.hdf5_weight_label.setText("导入完毕!")
+                if can_upgrade():
+                    self.import_detail_textEdit.append("========================================================")
+                    self.import_detail_textEdit.append(
+                        "Hikyuu 新版本 ({}) 已发布，建议更新".format(get_last_version()))
+                    self.import_detail_textEdit.append("更新命令: pip instal hikyuu --upgrade")
+                    self.import_detail_textEdit.append("========================================================")
                 self.import_running = False
 
             elif msg_task_name == 'IMPORT_KDATA':
@@ -648,7 +663,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     self.import_detail_textEdit.append('导入 {} 分时记录数：{}'.format(msg[3], msg[5]))
 
             elif msg_task_name == 'IMPORT_WEIGHT':
-                self.hdf5_weight_label.setText(msg[2])
                 if msg[2] == '导入权息数据完毕!':
                     self.import_detail_textEdit.append('导入权息记录数：{}'.format(msg[3]))
                 elif msg[2] == '导入通达信财务信息完毕!':
@@ -662,28 +676,58 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 if msg[2] != 'FINISHED':
                     self.import_detail_textEdit.append(msg[2])
 
+            elif msg_task_name == 'IMPORT_ZH_BOND10':
+                if msg[2] != 'FINISHED':
+                    self.import_detail_textEdit.append(msg[2])
+
     @pyqtSlot()
     def on_start_import_pushButton_clicked(self):
-        config = self.getCurrentConfig()
-        if config.getboolean('hdf5', 'enable') \
-                and (not os.path.lexists(config['hdf5']['dir']) or not os.path.isdir(config['hdf5']['dir'])):
-            QMessageBox.about(self, "错误", '指定的目标数据存放目录不存在！')
-            return
-
-        if config.getboolean('tdx', 'enable') \
-            and (not os.path.lexists(config['tdx']['dir'])
-                 or not os.path.isdir(config['tdx']['dir'])):
-            QMessageBox.about(self, "错误", "请确认通达信安装目录是否正确！")
-            return
         try:
             self.saveConfig()
         except Exception as e:
             QMessageBox.about(self, "保存配置信息失败", str(e))
             return
 
+        config = self.getCurrentConfig()
+        try:
+            if config.getboolean('hdf5', 'enable'):
+                if not os.path.lexists(config['hdf5']['dir']):
+                    os.makedirs(f"{config['hdf5']['dir']}/tmp")
+                elif not os.path.isdir(config['hdf5']['dir']):
+                    QMessageBox.about(self, "错误", '指定的目标数据存放目录不存在！')
+                    return
+
+            if config.getboolean('tdx', 'enable'):
+                if not os.path.lexists(config['tdx']['dir']):
+                    os.makedirs(f"{config['tdx']['dir']}/tmp")
+                elif not os.path.isdir(config['tdx']['dir']):
+                    QMessageBox.about(self, "错误", "请确认通达信安装目录是否正确！")
+                    return
+
+            if config.getboolean('mysql', 'enable'):
+                if not os.path.lexists(config['mysql']['tmpdir']):
+                    os.makedirs(config['mysql']['tmpdir'])
+                elif not os.path.isdir(config['mysql']['tmpdir']):
+                    QMessageBox.about(self, "错误", "请确认临时目录是否正确！")
+                    return
+        except Exception as e:
+            QMessageBox.about(self, "错误", str(e))
+            return
+
+        now = hikyuu.Datetime.now()
+        today = hikyuu.Datetime.today()
+        if now.day_of_week() not in (0, 6) and hikyuu.TimeDelta(0, 8, 30) < now - today < hikyuu.TimeDelta(0, 15, 45):
+            reply = QMessageBox.question(self, '警告', '交易日8:30-15:45分之间导入数据将导致盘后数据错误，是否仍要继续执行导入?',
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
+
         self.import_running = True
         self.start_import_pushButton.setEnabled(False)
         self.reset_progress_bar()
+
+        if config.getboolean('weight', 'enable', fallback=False):
+            self.hdf5_weight_label.setText("正在导入")
 
         self.import_status_label.setText("正在启动任务....")
         QApplication.processEvents()
@@ -764,11 +808,7 @@ def start():
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     app = QApplication(sys.argv)
-    use_dark_style = False  # 使用暗黑主题
-    if use_dark_style:
-        import qdarkstyle
-        app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5'))
-    myWin = MyMainWindow(capture_output=True, use_dark_style=use_dark_style)
+    myWin = MyMainWindow(capture_output=True)
     myWin.show()
     sys.exit(app.exec())
 
@@ -789,18 +829,14 @@ if __name__ == "__main__":
     f.setPixelSize(12)
     app.setFont(f)
 
-    use_dark_style = False  # 使用暗黑主题
-    if use_dark_style:
-        import qdarkstyle
-        app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5'))
     if (len(sys.argv) > 1 and sys.argv[1] == '0'):
         FORMAT = '%(asctime)-15s [%(levelname)s]: %(message)s [%(name)s::%(funcName)s]'
         logging.basicConfig(format=FORMAT, level=logging.INFO, handlers=[
             logging.StreamHandler(),
         ])
-        myWin = MyMainWindow(capture_output=False, use_dark_style=use_dark_style)
+        myWin = MyMainWindow(capture_output=False)
     else:
-        myWin = MyMainWindow(capture_output=True, use_dark_style=use_dark_style)
+        myWin = MyMainWindow(capture_output=True)
 
     myWin.show()
     sys.exit(app.exec())

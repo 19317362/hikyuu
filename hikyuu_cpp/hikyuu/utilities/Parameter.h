@@ -17,13 +17,15 @@
 #include <map>
 #include <boost/any.hpp>
 
-#include "../config.h"
+#include "hikyuu/config.h"
+#include "hikyuu/utilities/config.h"
 
 #if HKU_SUPPORT_SERIALIZATION
 #include <boost/lexical_cast.hpp>
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/split_member.hpp>
 #include <boost/serialization/nvp.hpp>
+#include "../serialization/Block_serialization.h"
 #include "../serialization/KData_serialization.h"
 #include "../serialization/Datetime_serialization.h"
 #else
@@ -126,12 +128,14 @@ public:
     }
 
     /** 获取参数个数 */
-    size_t size() const;
+    size_t size() const {
+        return m_params.size();
+    }
 
     /**
      * 获取指定参数的实际类型
      * @param name 指定参数名称
-     * @return "string" | "int" | "double" | "bool" | "Stock" |
+     * @return "string" | "int" | "double" | "bool" | "Stock" | "Block"
      *         "KQuery" | "KData" | "PriceList" | "DatetimeList"
      */
     string type(const string& name) const;
@@ -204,26 +208,30 @@ private:
                 type = "double";
                 double x = boost::any_cast<double>(arg);
                 value = boost::lexical_cast<string>(x);
-            } else if (arg.type() == typeid(string)) {
+            } else if (strcmp(arg.type().name(), typeid(string).name()) == 0) {
                 type = "string";
                 value = boost::any_cast<string>(arg);
-            } else if (arg.type() == typeid(Stock)) {
+            } else if (strcmp(arg.type().name(), typeid(Stock).name()) == 0) {
                 type = "stock";
                 value = "stock";
                 stock = boost::any_cast<Stock>(arg);
-            } else if (arg.type() == typeid(KQuery)) {
+            } else if (strcmp(arg.type().name(), typeid(Block).name()) == 0) {
+                type = "block";
+                value = "block";
+                block = boost::any_cast<Block>(arg);
+            } else if (strcmp(arg.type().name(), typeid(KQuery).name()) == 0) {
                 type = "query";
                 value = "query";
                 query = boost::any_cast<KQuery>(arg);
-            } else if (arg.type() == typeid(KData)) {
+            } else if (strcmp(arg.type().name(), typeid(KData).name()) == 0) {
                 type = "kdata";
                 value = "kdata";
                 kdata = boost::any_cast<KData>(arg);
-            } else if (arg.type() == typeid(PriceList)) {
+            } else if (strcmp(arg.type().name(), typeid(PriceList).name()) == 0) {
                 type = "PriceList";
                 value = "price_list";
                 price_list = boost::any_cast<PriceList>(arg);
-            } else if (arg.type() == typeid(DatetimeList)) {
+            } else if (strcmp(arg.type().name(), typeid(DatetimeList).name()) == 0) {
                 type = "DatetimeList";
                 value = "date_list";
                 date_list = boost::any_cast<DatetimeList>(arg);
@@ -237,6 +245,7 @@ private:
         string type;
         string value;
         Stock stock;
+        Block block;
         KQuery query;
         KData kdata;
         PriceList price_list;
@@ -248,6 +257,7 @@ private:
             ar& BOOST_SERIALIZATION_NVP(type);
             ar& BOOST_SERIALIZATION_NVP(value);
             ar& BOOST_SERIALIZATION_NVP(stock);
+            ar& BOOST_SERIALIZATION_NVP(block);
             ar& BOOST_SERIALIZATION_NVP(query);
             ar& BOOST_SERIALIZATION_NVP(kdata);
             ar& BOOST_SERIALIZATION_NVP(price_list);
@@ -288,6 +298,8 @@ private:
                 m_params[record.name] = record.value;
             } else if (record.type == "stock") {
                 m_params[record.name] = record.stock;
+            } else if (record.type == "block") {
+                m_params[record.name] = record.block;
             } else if (record.type == "query") {
                 m_params[record.name] = record.query;
             } else if (record.type == "kdata") {
@@ -348,9 +360,73 @@ public:                                                                     \
         return getParam<ValueType>(name);                                   \
     }
 
-inline size_t Parameter::size() const {
-    return m_params.size();
-}
+/**
+ * 支持自定义类参数检查及变化通知
+ * 子类需要实现重载以下虚函数接口:
+ *    virtual void _checkParam(const string& name) const
+ * 基类需要实现以下接口:
+ *    void baseCheckParam(const string& name) const
+ *    void paramChanged()
+ * 另：python 中一般不需要引出 paramChanged/checkParam/_checkParam，python
+ * 类继承时可以自己在初始化时进行检查
+ */
+#define PARAMETER_SUPPORT_WITH_CHECK                                         \
+protected:                                                                   \
+    Parameter m_params;                                                      \
+    void paramChanged();                                                     \
+    void checkParam(const string& name) const {                              \
+        baseCheckParam(name);                                                \
+        _checkParam(name);                                                   \
+    }                                                                        \
+    virtual void _checkParam(const string& name) const {}                    \
+                                                                             \
+private:                                                                     \
+    void baseCheckParam(const string& name) const;                           \
+                                                                             \
+public:                                                                      \
+    const Parameter& getParameter() const {                                  \
+        return m_params;                                                     \
+    }                                                                        \
+                                                                             \
+    void setParameter(const Parameter& param) {                              \
+        m_params = param;                                                    \
+        for (auto iter = m_params.begin(); iter != m_params.end(); ++iter) { \
+            checkParam(iter->first);                                         \
+        }                                                                    \
+        paramChanged();                                                      \
+    }                                                                        \
+                                                                             \
+    bool haveParam(const string& name) const noexcept {                      \
+        return m_params.have(name);                                          \
+    }                                                                        \
+                                                                             \
+    template <typename ValueType>                                            \
+    void setParam(const string& name, const ValueType& value) {              \
+        m_params.set<ValueType>(name, value);                                \
+        checkParam(name);                                                    \
+        paramChanged();                                                      \
+    }                                                                        \
+                                                                             \
+    template <typename ValueType>                                            \
+    ValueType getParam(const string& name) const {                           \
+        return m_params.get<ValueType>(name);                                \
+    }                                                                        \
+                                                                             \
+    template <typename ValueType>                                            \
+    ValueType tryGetParam(const string& name, const ValueType& val) const {  \
+        return m_params.tryGet<ValueType>(name, val);                        \
+    }                                                                        \
+                                                                             \
+    template <typename ValueType>                                            \
+    ValueType getParamFromOther(const Parameter& other, const string& name,  \
+                                const ValueType& default_value) {            \
+        if (other.have(name)) {                                              \
+            setParam<ValueType>(name, other.get<ValueType>(name));           \
+        } else {                                                             \
+            setParam<ValueType>(name, default_value);                        \
+        }                                                                    \
+        return getParam<ValueType>(name);                                    \
+    }
 
 template <typename ValueType>
 ValueType Parameter::get(const string& name) const {
@@ -359,7 +435,12 @@ ValueType Parameter::get(const string& name) const {
     if (iter == m_params.end()) {
         throw std::out_of_range("out_of_range in Parameter::get : " + name);
     }
-    return boost::any_cast<ValueType>(iter->second);
+    // return boost::any_cast<ValueType>(iter->second);
+    try {
+        return boost::any_cast<ValueType>(iter->second);
+    } catch (...) {
+        throw std::runtime_error("failed conversion param: " + name);
+    }
 }
 
 template <typename ValueType>
@@ -382,7 +463,7 @@ void Parameter::set(const string& name, const ValueType& value) {
         return;
     }
 
-    if (m_params[name].type() != typeid(ValueType)) {
+    if (strcmp(m_params[name].type().name(), typeid(ValueType).name()) != 0) {
         if ((m_params[name].type() == typeid(int) || m_params[name].type() == typeid(int64_t)) &&
             (typeid(ValueType) == typeid(int) || typeid(ValueType) == typeid(int64_t))) {
             // 忽略，允许设定
@@ -413,7 +494,7 @@ inline void Parameter::set(const string& name, const boost::any& value) {
         return;
     }
 
-    if (m_params[name].type() != value.type()) {
+    if (strcmp(m_params[name].type().name(), value.type().name()) != 0) {
         throw std::logic_error("Mismatching type! need type " +
                                string(m_params[name].type().name()) + " but value type is " +
                                string(value.type().name()));

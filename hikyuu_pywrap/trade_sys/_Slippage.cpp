@@ -17,6 +17,7 @@ class PySlippageBase : public SlippageBase {
 
 public:
     using SlippageBase::SlippageBase;
+    PySlippageBase(const SlippageBase& base) : SlippageBase(base) {}
 
     void _calculate() override {
         PYBIND11_OVERLOAD_PURE(void, SlippageBase, _calculate, );
@@ -38,7 +39,8 @@ public:
 };
 
 void export_Slippage(py::module& m) {
-    py::class_<SlippageBase, SPPtr, PySlippageBase>(m, "SlippageBase", R"(移滑价差算法基类
+    py::class_<SlippageBase, SPPtr, PySlippageBase>(m, "SlippageBase", py::dynamic_attr(),
+                                                    R"(移滑价差算法基类
 
 自定义移滑价差接口：
 
@@ -49,6 +51,7 @@ void export_Slippage(py::module& m) {
     - _reset : 【可选】重载私有变量)")
 
       .def(py::init<>())
+      .def(py::init<const SlippageBase&>())
       .def(py::init<const string&>(), R"(初始化构造函数
         
     :param str name: 名称)")

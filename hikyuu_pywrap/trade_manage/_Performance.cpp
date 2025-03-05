@@ -14,6 +14,8 @@ namespace py = pybind11;
 void export_Performance(py::module& m) {
     py::class_<Performance>(m, "Performance", "简单绩效统计")
       .def(py::init<>())
+      .def_static("exist", &Performance::exist)
+
       .def("reset", &Performance::reset, R"(reset(self)
 
         复位，清除已计算的结果)")
@@ -36,7 +38,7 @@ void export_Performance(py::module& m) {
         :param TradeManager tm: 指定的交易管理实例
         :param Datetime datetime: 统计截止时刻)")
 
-      .def("names", &Performance::names, R"(names(self)
+      .def("names", &Performance::names, py::return_value_policy::copy, R"(names(self)
       
       获取所有统计项名称)")
 

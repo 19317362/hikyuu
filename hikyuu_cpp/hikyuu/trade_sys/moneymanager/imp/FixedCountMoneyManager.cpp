@@ -19,8 +19,15 @@ FixedCountMoneyManager::FixedCountMoneyManager() : MoneyManagerBase("MM_FixedCou
 
 FixedCountMoneyManager::~FixedCountMoneyManager() {}
 
-double FixedCountMoneyManager ::_getBuyNumber(const Datetime& datetime, const Stock& stock,
-                                              price_t price, price_t risk, SystemPart from) {
+void FixedCountMoneyManager::_checkParam(const string& name) const {
+    if ("n" == name) {
+        double n = getParam<double>("n");
+        HKU_ASSERT(n > 0.0);
+    }
+}
+
+double FixedCountMoneyManager::_getBuyNumber(const Datetime& datetime, const Stock& stock,
+                                             price_t price, price_t risk, SystemPart from) {
     return getParam<double>("n");
 }
 
@@ -30,9 +37,9 @@ double FixedCountMoneyManager::_getSellShortNumber(const Datetime& datetime, con
 }
 
 MoneyManagerPtr HKU_API MM_FixedCount(double n) {
-    FixedCountMoneyManager* p = new FixedCountMoneyManager();
+    MoneyManagerPtr p = make_shared<FixedCountMoneyManager>();
     p->setParam<double>("n", n);
-    return MoneyManagerPtr(p);
+    return p;
 }
 
 } /* namespace hku */

@@ -10,7 +10,8 @@
 import sys
 import traceback
 import functools
-from .mylog import hku_logger
+import asyncio
+from .mylog import hku_logger, g_hku_logger_lock
 
 
 class HKUCheckError(Exception):
@@ -115,21 +116,23 @@ def hku_catch(ret=None, trace=False, callback=None, retry=1, with_msg=False, re_
                     hku_logger.debug(errmsg)
                 except Exception:
                     errmsg = "{} [{}.{}]".format(get_exception_info(), func.__module__, func.__name__)
-                    hku_logger.error(errmsg)
-                    if trace:
-                        # traceback.print_exc()
-                        hku_logger.error(traceback.format_exc())
+                    with g_hku_logger_lock:
+                        hku_logger.error(errmsg)
+                        if trace:
+                            hku_logger.error(traceback.format_exc())
                     if i == (retry - 1):
                         if callback is not None:
                             callback(*args, **kargs)
                         if re_raise:
                             raise Exception(errmsg)
+                except KeyboardInterrupt:
+                    raise KeyboardInterrupt()
                 except:
                     errmsg = "Unknown error! {} [{}.{}]".format(get_exception_info(), func.__module__, func.__name__)
-                    hku_logger.error(errmsg)
-                    if trace:
-                        # traceback.print_exc()
-                        hku_logger.error(traceback.format_exc())
+                    with g_hku_logger_lock:
+                        hku_logger.error(errmsg)
+                        if trace:
+                            hku_logger.error(traceback.format_exc())
                     if i == (retry - 1):
                         if callback is not None:
                             callback(*args, **kargs)
@@ -140,3 +143,11 @@ def hku_catch(ret=None, trace=False, callback=None, retry=1, with_msg=False, re_
         return wrappedFunc
 
     return hku_catch_wrap
+
+
+def hku_to_async(func):
+    @functools.wraps(func)
+    async def async_func(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, func, *args, **kwargs)
+    return async_func

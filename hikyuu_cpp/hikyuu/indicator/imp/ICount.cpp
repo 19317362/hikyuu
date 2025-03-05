@@ -19,8 +19,10 @@ ICount::ICount() : IndicatorImp("COUNT", 1) {
 
 ICount::~ICount() {}
 
-bool ICount::check() {
-    return getParam<int>("n") >= 0;
+void ICount::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
 }
 
 void ICount::_calculate(const Indicator& data) {
@@ -37,14 +39,17 @@ void ICount::_calculate(const Indicator& data) {
 
     int n = getParam<int>("n");
 
+    auto const* src = data.data();
+    auto* dst = this->data();
+
     if (0 == n) {
         m_discard = data.discard();
         int count = 0;
         for (size_t i = m_discard; i < total; ++i) {
-            if (data[i] != 0) {
+            if (src[i] != 0) {
                 count++;
             }
-            _set(count, i);
+            dst[i] = count;
         }
         return;
     }
@@ -59,23 +64,23 @@ void ICount::_calculate(const Indicator& data) {
     int sum = 0;
     size_t first_end = startPos + n >= total ? total : startPos + n;
     for (size_t i = startPos; i < first_end; ++i) {
-        if (data[i] != 0) {
+        if (src[i] != 0) {
             sum++;
         }
     }
 
     if (first_end >= 1) {
-        _set(sum, first_end - 1);
+        dst[first_end - 1] = sum;
     }
 
     for (size_t i = first_end; i < total; ++i) {
-        if (data[i] != 0) {
+        if (src[i] != 0) {
             sum++;
         }
-        if (data[i - n] != 0) {
+        if (src[i - n] != 0) {
             sum--;
         }
-        _set(sum, i);
+        dst[i] = sum;
     }
 }
 

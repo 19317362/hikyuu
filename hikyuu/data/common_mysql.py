@@ -29,7 +29,12 @@ from pathlib import Path
 import mysql.connector
 
 from hikyuu.data.common import get_stktype_list, get_new_holidays
-from hikyuu.util import hku_debug
+from hikyuu.util import hku_debug, hku_info
+
+
+def get_mysql_connect_version():
+    m, n, _ = mysql.connector.__version__.split('.')
+    return int(m) + float(n) * 0.1
 
 
 def is_exist_db(connect):
@@ -56,26 +61,38 @@ def create_database(connect):
     """创建数据库"""
     sql_dir = os.path.dirname(__file__) + "/mysql_upgrade"
     cur = connect.cursor()
+    mysql_version = get_mysql_connect_version()
     if not is_exist_db(connect):
         filename = sql_dir + "/createdb.sql"
         with open(filename, 'r', encoding='utf8') as f:
             sql = f.read()
-        for x in cur.execute(sql, multi=True):
-            #print(x.statement)
-            pass
+        if mysql_version >= 9.2:
+            cur.execute(sql)
+            _ = cur.fetchall()
+            while cur.nextset():
+                _ = cur.fetchall()
+        else:
+            for x in cur.execute(sql, multi=True):
+                pass
 
     db_version = get_db_version(connect)
-    files = [x for x in Path(sql_dir).iterdir() \
-             if x.is_file() \
-                and x.name != 'createdb.sql' \
-                and x.name != '__init__.py' \
-                and int(x.stem) > db_version and not x.is_dir()]
+    files = [x for x in Path(sql_dir).iterdir()
+             if x.is_file()
+             and x.name != 'createdb.sql'
+             and x.name != '__init__.py'
+             and int(x.stem) > db_version and not x.is_dir()]
     files.sort()
     for file in files:
         sql = file.read_text(encoding='utf8')
-        for x in cur.execute(sql, multi=True):
-            #print(x.statement)
-            pass
+        if mysql_version >= 9.2:
+            cur.execute(sql, map_results=False)
+            _ = cur.fetchall()
+            while cur.nextset():
+                _ = cur.fetchall()
+        else:
+            for x in cur.execute(sql, multi=True):
+                # print(x.statement)
+                pass
 
     connect.commit()
     cur.close()
@@ -94,7 +111,7 @@ def get_codepre_list(connect, marketid, quotations):
     """获取前缀代码表"""
     stktype_list = get_stktype_list(quotations)
     sql = "select codepre, type from `hku_base`.`coderuletype` " \
-          "where marketid={marketid} and type in {type_list}"\
+          "where marketid={marketid} and type in {type_list} ORDER by length(codepre) DESC"\
         .format(marketid=marketid, type_list=stktype_list)
     cur = connect.cursor()
     cur.execute(sql)
@@ -177,7 +194,7 @@ def get_table(connect, market, code, ktype):
                     `count` DOUBLE UNSIGNED NOT NULL,
                     PRIMARY KEY (`date`)
                 )
-                COLLATE='utf8_general_ci'
+                COLLATE='utf8mb4_general_ci'
                 ENGINE=MyISAM
                 ;
               """.format(schema=schema, name=tablename)
@@ -252,7 +269,7 @@ def update_extern_data(connect, market, code, data_type):
             startdate = newdate + 1401
             enddate = newdate + 1500
         return (startdate, enddate)
-    
+
     def getHour2Date(olddate):
         mint = olddate - olddate // 10000 * 10000
         newdate = olddate // 10000 * 10000
@@ -263,7 +280,7 @@ def update_extern_data(connect, market, code, data_type):
             startdate = newdate + 1301
             enddate = newdate + 1500
         return (startdate, enddate)
-    
+
     def getMin15Date(olddate):
         mint = olddate - olddate // 10000 * 10000
         newdate = olddate // 10000 * 10000
@@ -374,7 +391,7 @@ def update_extern_data(connect, market, code, data_type):
         base_table = get_table(connect, market, code, 'day')
     else:
         index_list = ('min15', 'min30', 'min60', 'hour2')
-        #index_list = ('min15', )
+        # index_list = ('min15', )
         base_table = get_table(connect, market, code, 'min5')
 
     base_lastdate = get_lastdatetime(connect, base_table)
@@ -407,7 +424,7 @@ def update_extern_data(connect, market, code, data_type):
 
         update_buffer = []
         insert_buffer = []
-        #for current_base in base_list:
+        # for current_base in base_list:
         length_base_all = len(base_list)
         for x in range(length_base_all):
             current_date = base_list[x][0]
@@ -415,15 +432,15 @@ def update_extern_data(connect, market, code, data_type):
                 continue
             last_start_date, last_end_date = getNewDate(index_type, current_date)
 
-            #cur = connect.cursor()
-            #cur.execute(
+            # cur = connect.cursor()
+            # cur.execute(
             #    'select date, open, high, low, close, amount, count from {} \
             #    where date>={} and date<={} order by date asc'.format(
             #        base_table, last_start_date, last_end_date
             #    )
-            #)
-            #base_record_list = [r for r in cur]
-            #cur.close()
+            # )
+            # base_record_list = [r for r in cur]
+            # cur.close()
             base_record_list = []
             start_ix = x
             ix_date = current_date

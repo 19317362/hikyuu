@@ -6,17 +6,13 @@
 开始请先下载数据
 ----------------
 
-.. note::
-
-    数据下载工具需要使用到 unrar 命令，Linux 下请自行安装 unrar。
-
 pip 安装 Hikyuu 后，可在命令行终端中执行 hikyuutdx 命令，启动数据下载工具，并按界面提示下载数据：
 
 .. figure:: _static/install-20190228.png
 
 .. note::
 
-    如在命令行终端中无法执行 hikyuutdx 命令，请到 python 安装目录下的 Scripts 子目录中选择该执行文件（HikyuuTDX.exe）。
+    如在命令行终端中无法执行 hikyuutdx 命令，请到 python 安装目录下的 Scripts （通常是安装python时没有将该路径放入系统 PATH 路径中）子目录中选择该执行文件（HikyuuTDX.exe）。如果还是不行，可以到 python/Lib/site-packages 下找到 hikyuu 的安装目录，在其下的 gui 目录中有 HikyuuTdx.py, 可以从命令行终端中直接执行 python HikyuuTdx.py 执行观察报错信息。
 
 如不希望使用 GUI 图形界面下载，可在命令行终端中执行 importdata 命令，如下图所示：
 
@@ -24,7 +20,7 @@ pip 安装 Hikyuu 后，可在命令行终端中执行 hikyuutdx 命令，启动
 
 .. note::
 
-    由于 importdata 命令使用的是 HikyuuTDX 生成的配置文件，所以在第一次执行 importdata 之前需要至少运行过一次 HikyuuTDX。
+    由于 importdata 命令使用的是 HikyuuTDX 生成的配置文件，windows建议至少运行过一次 HikyuuTDX 进行配置（可以不执行导入，但配置后必须先退出），否则将使用默认配置。如果默认配置导入出错，可以自行修改用户目录下.hikyuu目录中的相应配置文件。
 
 
 
@@ -85,7 +81,7 @@ Jupyter notebook（此前被称为 IPython notebook）是一个基于web的交�
 利用 Jupyter notebook 搭建自己的云量化平台
 -------------------------------------------
 
-搭建自己的云量化平台，首先需要拥有一个可以从外网访问的服务器，可以自行购买云服务器（如阿里云、腾讯云等）。之后需要对 Jupyter notebook 进行配置，使其能够远程进行访问，配置方法如下：
+搭建自己的云量化平台，首先需要拥有一个可以从公网访问的服务器，可以自行购买云服务器（如阿里云、腾讯云等）。之后需要对 Jupyter notebook 进行配置，使其能够远程进行访问，配置方法如下：
 
 1. 登陆远程服务器
 2. 生成配置文件，在 cmd 下，键入如下命令：
@@ -98,7 +94,7 @@ Jupyter notebook（此前被称为 IPython notebook）是一个基于web的交�
 
 ::
 
-    In [1]: from notebook.auth import passwd
+    In [1]: from jupyter_server.auth import passwd
     In [2]: passwd()
     Enter password: 
     Verify password: 
@@ -112,10 +108,10 @@ Jupyter notebook（此前被称为 IPython notebook）是一个基于web的交�
 
 ::
 
-    c.NotebookApp.ip='*'
-    c.NotebookApp.password = u'sha:ce...刚才复制的那个密文'
-    c.NotebookApp.open_browser = False
-    c.NotebookApp.port =8888 #随便指定一个端口
+    c.ServerApp.ip='0.0.0.0'
+    c.ServerApp.password = u'sha:ce...刚才复制的那个密文'
+    c.ServerApp.open_browser = False
+    c.ServerApp.port =8888 #随便指定一个端口
 
 5. 启动jupyter notebook，在 cmd 下，进入自己希望的工作目录后，键入命令：
 
@@ -137,6 +133,8 @@ Jupyter notebook（此前被称为 IPython notebook）是一个基于web的交�
 
 matplotlib显示图形时中文字体乱码的问题
 ---------------------------------------
+
+通常 hikyuu 绘图已经默认支持中文，如果仍出现乱码，可参考此处，或百度。
 
 需修改 matplotlib 配置文件，把字体改为支持中文的字体。matplotlib文件位于 python安装目录/matplotlib/mpl-data/matplotlibrc，可用任意文本编辑器打开编辑，文件位置如下图所示：
 
@@ -176,4 +174,31 @@ matplotlib 默认每次绘图后，都要调用 plt.show() 显示图形，这在
 
     #interactive  : False
     interactive  : True
+
+
+在 jupyter 中使用 matplotlib ipywidgets 后端
+-------------------------------------------------------
+
+默认的 matplotlib 绘图较慢且无法自由缩放，在 jupyter 环境中，可以使用 pip 安装 ipympl, 让 matplotlib 使用 web 方式绘图。
+
+在 jupyter 中开头使用 %matplotlib widget 命令，即可使用 ipympl 绘图。
+
+如果使用 ipympl 绘图时，出现 "Loading widgets ..." 后，不显示图像，可能是依赖包版本不兼容，可尝试使用 pip 更新 jupyterlab, notebook, ipywidgets 包。
+
+
+Ubuntu wayland 平台上 QT 不可用
+-----------------------------------
+
+使用 wayland 的 ubuntu, 可能需要设置 QT_QPA_PLATFORM=wayland 环境变量，通常可以在 .bashrc 中 添加 export QT_QPA_PLATFORM=wayland 进行设置
+
+
+PyCharm 等 IDE 无法正常提示帮助信息
+-----------------------------------
+
+1. 安装 pybind11-stubgen，使用命令 pip install pybind11-stubgen
+2. 运行 pybind11-stubgen hikyuu 命令，即可正常提示帮助信息。
+
+.. note::
+
+    2.3.1 版本开始，hikyuu 打包时已经默认生成 pyi 文件
         

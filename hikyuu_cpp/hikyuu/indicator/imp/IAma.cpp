@@ -25,8 +25,14 @@ IAma::IAma() : IndicatorImp("AMA", 2) {
 
 IAma::~IAma() {}
 
-bool IAma::check() {
-    return getParam<int>("n") >= 1 && getParam<int>("fast_n") >= 0 && getParam<int>("slow_n") >= 0;
+void IAma::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 1);
+    } else if ("fast_n" == name) {
+        HKU_ASSERT(getParam<int>("fast_n") >= 0);
+    } else if ("slow_n" == name) {
+        HKU_ASSERT(getParam<int>("slow_n") >= 0);
+    }
 }
 
 void IAma::_calculate(const Indicator& data) {
@@ -36,6 +42,10 @@ void IAma::_calculate(const Indicator& data) {
         m_discard = total;
         return;
     }
+
+    auto const* src = data.data();
+    auto* dst0 = this->data(0);
+    auto* dst1 = this->data(1);
 
     int n = getParam<int>("n");
     int fast_n = getParam<int>("fast_n");
@@ -47,35 +57,35 @@ void IAma::_calculate(const Indicator& data) {
     price_t slowest = 2.0 / (slow_n + 1);
     price_t delta = fastest - slowest;
 
-    price_t prevol = 0.0, vol = 0.0, er = 1.0, c(0.0);
-    price_t ama = data[start];
+    price_t prevol = 0.0, vol = 0.0, er = 1.0;
+    price_t ama = src[start];
     size_t first_end = start + n + 1 >= total ? total : start + n + 1;
     _set(ama, start, 0);
     _set(er, start, 1);
     for (size_t i = start + 1; i < first_end; ++i) {
-        vol += std::fabs(data[i] - data[i - 1]);
-        er = (vol == 0.0) ? 1.0 : (data[i] - data[start]) / vol;
+        vol += std::fabs(src[i] - src[i - 1]);
+        er = (vol == 0.0) ? 1.0 : (src[i] - src[start]) / vol;
         if (er > 1.0)
             er = 1.0;
-        c = std::pow((std::fabs(er) * delta + slowest), 2);
-        ama += c * (data[i] - ama);
-        _set(ama, i, 0);
-        _set(er, i, 1);
+        price_t c = std::pow((std::fabs(er) * delta + slowest), 2);
+        ama += c * (src[i] - ama);
+        dst0[i] = ama;
+        dst1[i] = er;
     }
 
     prevol = vol;
     for (size_t i = first_end; i < total; ++i) {
-        vol = prevol + std::fabs(data[i] - data[i - 1]) - std::fabs(data[i + 1 - n] - data[i - n]);
-        er = (vol == 0.0) ? 1.0 : (data[i] - data[i - n]) / vol;
+        vol = prevol + std::fabs(src[i] - src[i - 1]) - std::fabs(src[i + 1 - n] - src[i - n]);
+        er = (vol == 0.0) ? 1.0 : (src[i] - src[i - n]) / vol;
         if (er > 1.0)
             er = 1.0;
         if (er < -1.0)
             er = -1.0;
-        c = std::pow((std::fabs(er) * delta + slowest), 2);
-        ama += c * (data[i] - ama);
+        price_t c = std::pow((std::fabs(er) * delta + slowest), 2);
+        ama += c * (src[i] - ama);
         prevol = vol;
-        _set(ama, i, 0);
-        _set(er, i, 1);
+        dst0[i] = ama;
+        dst1[i] = er;
     }
 }
 
@@ -134,9 +144,7 @@ void IAma::_dyn_calculate(const Indicator& ind) {
     }
 
     size_t circleLength = minCircleLength;
-    if (minCircleLength * workerNum >= total) {
-        circleLength = minCircleLength;
-    } else {
+    if (minCircleLength * workerNum < total) {
         size_t tailCount = total % workerNum;
         circleLength = tailCount == 0 ? total / workerNum : total / workerNum + 1;
     }
@@ -147,15 +155,16 @@ void IAma::_dyn_calculate(const Indicator& ind) {
         if (first >= total) {
             break;
         }
-        tasks.push_back(ms_tg->submit([=, &ind, &n, &fast_n, &slow_n]() {
-            size_t endPos = first + circleLength;
-            if (endPos > total) {
-                endPos = total;
-            }
-            for (size_t i = circleLength * group; i < endPos; i++) {
-                _dyn_one_circle(ind, i, n[i], fast_n[i], slow_n[i]);
-            }
-        }));
+        tasks.push_back(
+          ms_tg->submit([this, &ind, &n, &fast_n, &slow_n, first, circleLength, total, group]() {
+              size_t endPos = first + circleLength;
+              if (endPos > total) {
+                  endPos = total;
+              }
+              for (size_t i = circleLength * group; i < endPos; i++) {
+                  _dyn_one_circle(ind, i, n[i], fast_n[i], slow_n[i]);
+              }
+          }));
     }
 
     for (auto& task : tasks) {

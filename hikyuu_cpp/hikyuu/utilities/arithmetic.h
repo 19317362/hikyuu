@@ -11,14 +11,16 @@
 #ifndef HIKYUU_UTILITIES_ARITHMETIC_H
 #define HIKYUU_UTILITIES_ARITHMETIC_H
 
+#include <cmath>
 #include <cctype>
 #include <vector>
 #include <string>
-#include <string_view>
 #include <algorithm>
 
-#ifndef HKU_API
-#define HKU_API
+#include "string_view.h"
+
+#ifndef HKU_UTILS_API
+#define HKU_UTILS_API
 #endif
 
 namespace hku {
@@ -29,13 +31,13 @@ namespace hku {
  */
 
 #if defined(_MSC_VER)
-std::string HKU_API utf8_to_gb(const char* szinput);
-std::string HKU_API utf8_to_gb(const std::string& szinput);
-std::string HKU_API gb_to_utf8(const char* szinput);
-std::string HKU_API gb_to_utf8(const std::string& szinput);
+std::string HKU_UTILS_API utf8_to_gb(const char *szinput);
+std::string HKU_UTILS_API utf8_to_gb(const std::string &szinput);
+std::string HKU_UTILS_API gb_to_utf8(const char *szinput);
+std::string HKU_UTILS_API gb_to_utf8(const std::string &szinput);
 #else
-std::string HKU_API utf8_to_gb(const std::string& szinput);
-std::string HKU_API gb_to_utf8(const std::string& szinput);
+std::string HKU_UTILS_API utf8_to_gb(const std::string &szinput);
+std::string HKU_UTILS_API gb_to_utf8(const std::string &szinput);
 #endif
 
 #define UTF8ToGB hku::utf8_to_gb
@@ -69,13 +71,44 @@ std::string HKU_API gb_to_utf8(const std::string& szinput);
 #define HKU_CPATH(s) (s)
 #endif
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#endif
+
 /**
  * 四舍五入，ROUND_HALF_EVEN 银行家舍入法
  * @param number  待四舍五入的数据
  * @param ndigits 保留小数位数
  * @return 处理过的数据
  */
-double HKU_API roundEx(double number, int ndigits = 0);
+template <typename ValueT>
+ValueT roundEx(ValueT number, int ndigits = 0) {
+    // 切换至：ROUND_HALF_EVEN 银行家舍入法
+    ValueT pow1, pow2, y, z;
+    ValueT x = number;
+    if (ndigits >= 0) {
+        pow1 = pow(ValueT(10.0), ValueT(ndigits));
+        pow2 = 1.0;
+        y = (x * pow1) * pow2;
+    } else {
+        pow1 = pow(ValueT(10.0), ValueT(-ndigits));
+        pow2 = 1.0;
+        y = x / pow1;
+    }
+
+    z = std::round(y);
+    if (std::fabs(y - z) == 0.5)
+        /* halfway between two integers; use round-half-even */
+        z = 2.0 * std::round(y / 2.0);
+
+    if (ndigits >= 0)
+        z = (z / pow2) / pow1;
+    else
+        z *= pow1;
+
+    return z;
+}
 
 /**
  * 向上截取，如10.1截取后为11
@@ -83,7 +116,36 @@ double HKU_API roundEx(double number, int ndigits = 0);
  * @param ndigits 保留小数位数
  * @return 处理过的数据
  */
-double HKU_API roundUp(double number, int ndigits = 0);
+template <typename ValueT>
+ValueT roundUp(ValueT number, int ndigits = 0) {
+    ValueT f;
+    int i;
+    f = 1.0;
+    i = std::abs(ndigits);
+    while (--i >= 0) {
+        f = f * 10.0;
+    }
+
+    if (ndigits < 0) {
+        number /= f;
+    } else {
+        number *= f;
+    }
+
+    if (number >= 0.0) {
+        number = std::floor(number + 1.0);
+    } else {
+        number = std::ceil(number - 1.0);
+    }
+
+    if (ndigits < 0) {
+        number *= f;
+    } else {
+        number /= f;
+    }
+
+    return number;
+}
 
 /**
  * 向下截取，如10.1截取后为10
@@ -91,20 +153,53 @@ double HKU_API roundUp(double number, int ndigits = 0);
  * @param ndigits 保留小数位数
  * @return 处理过的数据
  */
-double HKU_API roundDown(double number, int ndigits = 0);
+template <typename ValueT>
+ValueT roundDown(ValueT number, int ndigits = 0) {
+    ValueT f;
+    int i;
+    f = 1.0;
+    i = std::abs(ndigits);
+    while (--i >= 0) {
+        f = f * 10.0;
+    }
+
+    if (ndigits < 0) {
+        number /= f;
+    } else {
+        number *= f;
+    }
+
+    if (number >= 0.0) {
+        number = std::floor(number);
+    } else {
+        number = std::ceil(number);
+    }
+
+    if (ndigits < 0) {
+        number *= f;
+    } else {
+        number /= f;
+    }
+
+    return number;
+}
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 /** 转小写字符串 */
-inline void to_lower(std::string& s) {
+inline void to_lower(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); });
 }
 
 /** 转大写字符串 */
-inline void to_upper(std::string& s) {
+inline void to_upper(std::string &s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::toupper(c); });
 }
 
 /** 删除字符串两端空格 */
-inline void trim(std::string& s) {
+inline void trim(std::string &s) {
     if (s.empty()) {
         return;
     }
@@ -115,12 +210,13 @@ inline void trim(std::string& s) {
     s.erase(s.find_last_not_of("\n") + 1);
 }
 
+#if CPP_STANDARD >= CPP_STANDARD_17
 /**
  * 分割字符串
  * @param str 待封的字符串
  * @param c 分割符
  */
-inline std::vector<std::string_view> split(const std::string& str, char c) {
+inline std::vector<std::string_view> split(const std::string &str, char c) {
     std::vector<std::string_view> result;
     std::string_view view(str);
     size_t prepos = 0;
@@ -131,9 +227,7 @@ inline std::vector<std::string_view> split(const std::string& str, char c) {
         pos = view.find_first_of(c, prepos);
     }
 
-    if (prepos < str.size() - 1) {
-        result.emplace_back(str.substr(prepos));
-    }
+    result.emplace_back(view.substr(prepos));
     return result;
 }
 
@@ -144,7 +238,7 @@ inline std::vector<std::string_view> split(const std::string& str, char c) {
  * @return string_view 组成的 vector
  * @note 注意返回结果的生命周期应小于输入的字符串相同！
  */
-inline std::vector<std::string_view> split(const std::string_view& view, char c) {
+inline std::vector<std::string_view> split(const std::string_view &view, char c) {
     std::vector<std::string_view> result;
     size_t prepos = 0;
     size_t pos = view.find_first_of(c);
@@ -154,14 +248,12 @@ inline std::vector<std::string_view> split(const std::string_view& view, char c)
         pos = view.find_first_of(c, prepos);
     }
 
-    if (prepos < view.size() - 1) {
-        result.emplace_back(view.substr(prepos));
-    }
+    result.emplace_back(view.substr(prepos));
     return result;
 }
 
-inline std::vector<std::string_view> split(const std::string_view& str,
-                                           const std::string& split_str) {
+inline std::vector<std::string_view> split(const std::string_view &str,
+                                           const std::string &split_str) {
     std::vector<std::string_view> result;
     size_t split_str_len = split_str.size();
     if (split_str_len == 0) {
@@ -177,25 +269,64 @@ inline std::vector<std::string_view> split(const std::string_view& str,
         pos = str.find(split_str, prepos);
     }
 
-    if (prepos < str.size() - 1) {
-        result.emplace_back(str.substr(prepos));
-    }
+    result.emplace_back(str.substr(prepos));
     return result;
 }
 
+#else
+/**
+ * 分割字符串
+ * @param str 待封的字符串
+ * @param c 分割符
+ */
+inline std::vector<std::string> split(const std::string &str, char c) {
+    std::vector<std::string> result;
+    size_t prepos = 0;
+    size_t pos = str.find_first_of(c);
+    while (pos != std::string::npos) {
+        result.emplace_back(str.substr(prepos, pos - prepos));
+        prepos = pos + 1;
+        pos = str.find_first_of(c, prepos);
+    }
+
+    result.emplace_back(str.substr(prepos));
+    return result;
+}
+
+inline std::vector<std::string> split(const std::string &str, const std::string &split_str) {
+    std::vector<std::string> result;
+    size_t split_str_len = split_str.size();
+    if (split_str_len == 0) {
+        result.emplace_back(str);
+        return result;
+    }
+
+    size_t prepos = 0;
+    size_t pos = str.find(split_str);
+    while (pos != std::string::npos) {
+        result.emplace_back(str.substr(prepos, pos - prepos));
+        prepos = pos + split_str_len;
+        pos = str.find(split_str, prepos);
+    }
+
+    result.emplace_back(str.substr(prepos));
+    return result;
+}
+#endif /* #if CPP_STANDARD >= CPP_STANDARD_17 */
+
 /**
  * byte 转 16 进制字符串, 如 "abcd" 转换为 "61626364"
- * @param in_byte 输入的 byte 数组
+ * @param bytes 输入的 byte 数组
  * @param in_len byte 数组长度
  */
-inline std::string byteToHexStr(const char* bytes, size_t in_len) {
+inline std::string byteToHexStr(const char *bytes, size_t in_len) {
     std::string hexstr;
-    const unsigned char* in_byte = (const unsigned char*)bytes;
+    const unsigned char *in_byte = (const unsigned char *)bytes;
     if (in_byte == nullptr) {
         return hexstr;
     }
 
-    char* buf = new char[2 * in_len + 1];
+    char *buf = new char[2 * in_len + 1];
     size_t buf_ix = 0;
 
     for (size_t i = 0; i < in_len; ++i) {
@@ -214,25 +345,25 @@ inline std::string byteToHexStr(const char* bytes, size_t in_len) {
 
 /**
  * byte 转 16 进制字符串, 如 "abcd" 转换为 "61626364"
- * @param in_byte std::string 格式的输入
+ * @param bytes std::string 格式的输入
  */
-inline std::string byteToHexStr(const std::string& bytes) {
+inline std::string byteToHexStr(const std::string &bytes) {
     return byteToHexStr(bytes.c_str(), bytes.size());
 }
 
 /**
  * byte 转 16 进制字符串, 如 "abcd" 转换为 "0x61 0x62 0x63 0x64"
- * @param in_byte 输入的 byte 数组
+ * @param bytes 输入的 byte 数组
  * @param in_len byte 数组长度
  */
-inline std::string byteToHexStrForPrint(const char* bytes, size_t in_len) {
+inline std::string byteToHexStrForPrint(const char *bytes, size_t in_len) {
     std::string hexstr;
-    const unsigned char* in_byte = (const unsigned char*)bytes;
+    const unsigned char *in_byte = (const unsigned char *)bytes;
     if (in_byte == nullptr) {
         return hexstr;
     }
 
-    char* buf = new char[5 * in_len + 1];
+    char *buf = new char[5 * in_len + 1];
     size_t buf_ix = 0;
 
     for (size_t i = 0; i < in_len; ++i) {
@@ -258,9 +389,9 @@ inline std::string byteToHexStrForPrint(const char* bytes, size_t in_len) {
 
 /**
  * byte 转 16 进制字符串, 如 "abcd" 转换为 "61626364"
- * @param in_byte 输入的 byte 数组
+ * @param bytes 输入的 byte 数组
  */
-inline std::string byteToHexStrForPrint(const std::string& bytes) {
+inline std::string byteToHexStrForPrint(const std::string &bytes) {
     return byteToHexStrForPrint(bytes.c_str(), bytes.size());
 }
 

@@ -9,49 +9,17 @@
 
 #include <thread>
 #include <functional>
-#include "spot_generated.h"
 #include "../../DataType.h"
 #include "../../utilities/thread/ThreadPool.h"
+#include "../SpotRecord.h"
+
+namespace hikyuu {
+namespace flat {
+struct Spot;
+}
+}  // namespace hikyuu
 
 namespace hku {
-
-/**
- * 接收外部实时数据结构
- * @ingroup Agent
- */
-struct HKU_API SpotRecord {
-    string market;            ///< 市场标识
-    string code;              ///< 证券代码
-    string name;              ///< 证券名称
-    Datetime datetime;        ///< 数据时间
-    price_t yesterday_close;  ///< 昨日收盘价
-    price_t open;             ///< 开盘价
-    price_t high;             ///< 最高价
-    price_t low;              ///< 最低价
-    price_t close;            ///< 收盘价
-    price_t amount;           ///< 成交金额 （千元）
-    price_t volume;           ///< 成交量（手）
-    price_t bid1;             ///< 买一价
-    price_t bid1_amount;      ///< 买一数量（手）
-    price_t bid2;             ///< 买二价
-    price_t bid2_amount;      ///< 买二数量
-    price_t bid3;             ///< 买三价
-    price_t bid3_amount;      ///< 买三数量
-    price_t bid4;             ///< 买四价
-    price_t bid4_amount;      ///< 买四数量
-    price_t bid5;             ///< 买五价
-    price_t bid5_amount;      ///< 买五数量
-    price_t ask1;             ///< 卖一价
-    price_t ask1_amount;      ///< 卖一数量
-    price_t ask2;             ///< 卖二价
-    price_t ask2_amount;      ///< 卖二数量
-    price_t ask3;             ///< 卖三价
-    price_t ask3_amount;      ///< 卖三数量
-    price_t ask4;             ///< 卖四价
-    price_t ask4_amount;      ///< 卖四数量
-    price_t ask5;             ///< 卖五价
-    price_t ask5_amount;      ///< 卖五数量
-};
 
 /**
  * 接收外部实时数据代理
@@ -75,9 +43,29 @@ public:
         return !m_stop;
     }
 
+    void setWorkerNum(size_t worker_num) {
+        m_work_num = worker_num;
+    }
+
+    size_t getWorkerNum() const {
+        return m_work_num;
+    }
+
     /** 设置是否打印数据接收进展情况，主要用于在交互环境下关闭打印 */
     void setPrintFlag(bool print) {
         m_print = print;
+    }
+
+    bool getPrintFlag() const {
+        return m_print;
+    }
+
+    void setServerAddr(const string& addr) {
+        m_server_addr = addr;
+    }
+
+    const string& getServerAddr() const {
+        return m_server_addr;
     }
 
     /**
@@ -136,14 +124,20 @@ private:
     enum STATUS { WAITING, RECEIVING };  // 等待新的批次数据，正在接收批次数据中
     enum STATUS m_status = WAITING;      // 当前内部状态
     std::atomic_bool m_stop = true;      // 结束代理工作标识
-    bool m_print = true;          // 是否打印接收进度，防止的交互模式的影响
-    int m_revTimeout = 100;       // 连接数据服务超时时长（毫秒）
-    size_t m_batch_count = 0;     // 记录本次批次接收的数据数量
-    std::thread m_receiveThread;  // 数据接收线程
-    ThreadPool m_tg;              // 数据处理任务线程池
+
+    int m_revTimeout = 100;                         // 连接数据服务超时时长（毫秒）
+    std::thread m_receiveThread;                    // 数据接收线程
+    std::unique_ptr<ThreadPool> m_tg;               // 数据处理任务线程池
+    size_t m_work_num = 1;                          // 数据处理任务线程池线程数
+    std::unique_ptr<ThreadPool> m_receive_data_tg;  // 数据接收任务组
+
+    bool m_print = true;   // 是否打印连接信息
+    string m_server_addr;  // 服务器地址
+
+    // 下面属性被修改时需要加锁，以便可以使用多线程方式运行 strategy
+    std::mutex m_mutex;
     list<std::function<void(const SpotRecord&)>> m_processList;  // 已注册的 spot 处理函数列表
     list<std::function<void(Datetime)>> m_postProcessList;  // 已注册的批次后处理函数列表
-    vector<std::future<void>> m_process_task_list;
 };
 
 }  // namespace hku

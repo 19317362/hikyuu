@@ -17,10 +17,6 @@ IMrr::IMrr() : IndicatorImp("MRR", 1) {}
 
 IMrr::~IMrr() {}
 
-bool IMrr::check() {
-    return true;
-}
-
 void IMrr::_calculate(const Indicator& ind) {
     m_discard = 0;
     for (size_t i = 0, len = ind.discard(); i < len; i++) {
@@ -32,15 +28,13 @@ void IMrr::_calculate(const Indicator& ind) {
         _set(0., ind.discard());
     }
 
-    price_t pre_min = ind[ind.discard()];
+    auto const* src = ind.data();
+    auto* dst = this->data();
+    price_t pre_min = src[ind.discard()];
     for (size_t i = ind.discard() + 1; i < total; i++) {
-        if (ind[i] <= pre_min || pre_min == 0.) {
-            _set(0., i);
-        } else {
-            _set((ind[i] / pre_min - 1.0) * 100., i);
-        }
-        if (ind[i] < pre_min) {
-            pre_min = ind[i];
+        dst[i] = (src[i] <= pre_min || pre_min == 0.) ? 0.0 : (src[i] / pre_min - 1.0) * 100.;
+        if (src[i] < pre_min) {
+            pre_min = src[i];
         }
     }
 }

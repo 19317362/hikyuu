@@ -21,9 +21,7 @@ IPow::IPow() : IndicatorImp("POW", 1) {
 
 IPow::~IPow() {}
 
-bool IPow::check() {
-    return true;
-}
+void IPow::_checkParam(const string& name) const {}
 
 void IPow::_calculate(const Indicator& data) {
     size_t total = data.size();
@@ -34,8 +32,10 @@ void IPow::_calculate(const Indicator& data) {
     }
 
     int n = getParam<int>("n");
+    auto const* src = data.data();
+    auto* dst = this->data();
     for (size_t i = m_discard; i < total; ++i) {
-        _set(std::pow(data[i], n), i);
+        dst[i] = std::pow(src[i], n);
     }
 }
 

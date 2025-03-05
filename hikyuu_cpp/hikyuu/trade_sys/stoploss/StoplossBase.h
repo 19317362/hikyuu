@@ -13,29 +13,6 @@
 // #include "../../utilities/Parameter.h"
 #include "../../trade_manage/TradeManager.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-
-#if HKU_SUPPORT_XML_ARCHIVE
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#endif /* HKU_SUPPORT_XML_ARCHIVE */
-
-#if HKU_SUPPORT_TEXT_ARCHIVE
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#endif /* HKU_SUPPORT_TEXT_ARCHIVE */
-
-#if HKU_SUPPORT_BINARY_ARCHIVE
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#endif /* HKU_SUPPORT_BINARY_ARCHIVE */
-
-#include <boost/serialization/export.hpp>
-#endif /* HKU_SUPPORT_SERIALIZATION */
-
 namespace hku {
 
 /**
@@ -44,11 +21,12 @@ namespace hku {
  * @ingroup Stoploss
  */
 class HKU_API StoplossBase : public enable_shared_from_this<StoplossBase> {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     StoplossBase();
-    StoplossBase(const string& name);
+    explicit StoplossBase(const string& name);
+    StoplossBase(const StoplossBase&) = default;
     virtual ~StoplossBase();
 
     /** 获取名称 */
@@ -168,12 +146,12 @@ private:                                                       \
 #define STOPLOSS_NO_PRIVATE_MEMBER_SERIALIZATION
 #endif
 
-#define STOPLOSS_IMP(classname, str_name)    \
-public:                                      \
-    virtual StoplossPtr _clone() override {  \
-        return StoplossPtr(new classname()); \
-    }                                        \
-    virtual void _calculate() override;      \
+#define STOPLOSS_IMP(classname, str_name)     \
+public:                                       \
+    virtual StoplossPtr _clone() override {   \
+        return std::make_shared<classname>(); \
+    }                                         \
+    virtual void _calculate() override;       \
     virtual price_t getPrice(const Datetime&, price_t) override;
 
 /**
@@ -206,10 +184,6 @@ inline void StoplossBase::setTM(const TradeManagerPtr& tm) {
 
 inline KData StoplossBase::getTO() const {
     return m_kdata;
-}
-
-inline void StoplossBase::reset() {
-    _reset();
 }
 
 } /* namespace hku */

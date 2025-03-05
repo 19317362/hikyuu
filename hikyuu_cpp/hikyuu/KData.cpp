@@ -13,6 +13,8 @@
 
 namespace hku {
 
+KRecord KData::ms_null_krecord;
+
 HKU_API std::ostream& operator<<(std::ostream& os, const KData& kdata) {
     os << "KData{\n  size : " << kdata.size() << "\n  stock: " << kdata.getStock()
        << "\n  query: " << kdata.getQuery() << "\n}";
@@ -26,15 +28,15 @@ string KData::toString() const {
     return os.str();
 }
 
-KData::KData(const Stock& stock, const KQuery& query) {
-    if (!stock.isNull()) {
-        m_imp = KDataImpPtr(new KDataImp(stock, query));
-    }
-}
+KData::KData() : m_imp(make_shared<KDataImp>()) {}
+
+KData::KData(const Stock& stock, const KQuery& query)
+: m_imp(make_shared<KDataImp>(stock, query)) {}
 
 bool KData::operator==(const KData& thr) const {
     return this == &thr || m_imp == thr.m_imp ||
-           (getStock() == thr.getStock() && getQuery() == thr.getQuery());
+           (getStock() == thr.getStock() && getQuery() == thr.getQuery()) ||
+           (getStock().isNull() && thr.getStock().isNull());
 }
 
 size_t KData::getPosInStock(Datetime datetime) const {
@@ -59,6 +61,16 @@ void KData::tocsv(const string& filename) {
     }
 
     file.close();
+}
+
+KData KData::getKData(const Datetime& start, const Datetime& end) const {
+    const Stock& stk = getStock();
+    if (stk.isNull()) {
+        return KData();
+    }
+
+    const KQuery& query = getQuery();
+    return KData(stk, KQueryByDate(start, end, query.kType(), query.recoverType()));
 }
 
 Indicator KData::open() const {
@@ -90,13 +102,13 @@ KData HKU_API getKData(const string& market_code, const KQuery& query) {
 }
 
 KData HKU_API getKData(const string& market_code, const Datetime& start, const Datetime& end,
-                       KQuery::KType ktype, KQuery::RecoverType recoverType) {
+                       const KQuery::KType& ktype, KQuery::RecoverType recoverType) {
     KQuery query(start, end, ktype, recoverType);
     return StockManager::instance().getStock(market_code).getKData(query);
 }
 
-KData HKU_API getKData(const string& market_code, int64_t start, int64_t end, KQuery::KType ktype,
-                       KQuery::RecoverType recoverType) {
+KData HKU_API getKData(const string& market_code, int64_t start, int64_t end,
+                       const KQuery::KType& ktype, KQuery::RecoverType recoverType) {
     KQuery query(start, end, ktype, recoverType);
     return StockManager::instance().getStock(market_code).getKData(query);
 }

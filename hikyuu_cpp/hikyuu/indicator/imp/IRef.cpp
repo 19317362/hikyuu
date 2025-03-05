@@ -19,8 +19,10 @@ IRef::IRef() : IndicatorImp("REF", 1) {
 
 IRef::~IRef() {}
 
-bool IRef::check() {
-    return getParam<int>("n") >= 0;
+void IRef::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
 }
 
 void IRef::_calculate(const Indicator& data) {
@@ -32,8 +34,11 @@ void IRef::_calculate(const Indicator& data) {
         m_discard = total;
         return;
     }
+
+    auto const* src = data.data();
+    auto* dst = this->data();
     for (size_t i = m_discard; i < total; ++i) {
-        _set(data[i - n], i);
+        dst[i] = src[i - n];
     }
 }
 

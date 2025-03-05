@@ -102,9 +102,19 @@ void export_Indicator(py::module& m) {
     :param int result_index: 指定的结果集
     :rtype: float)")
 
-      .def("get_pos", &Indicator::getPos, R"(get_pos(self, date):
+      .def(
+        "get_pos",
+        [](const Indicator& self, const Datetime& d) {
+            size_t pos = self.getPos(d);
+            py::object ret = py::none();
+            if (pos != Null<size_t>()) {
+                ret = py::int_(pos);
+            }
+            return ret;
+        },
+        R"(get_pos(self, date):
 
-    获取指定日期相应的索引位置
+    获取指定日期相应的索引位置, 如果没有对应位置返回 None
 
     :param Datetime date: 指定日期
     :rtype: int)")
@@ -147,6 +157,14 @@ void export_Indicator(py::module& m) {
 
     :rtype: DatetimeList)")
 
+      .def("exist_nan", &Indicator::existNan, py::arg("result_idx=0"),
+           R"(exist_nan(self, result_index)
+
+    判断是否存在NaN值
+
+    :param int result_index: 指定的结果集
+    :rtype: bool)")
+
       .def("set_context", setContext_1)
       .def("set_context", setContext_2, R"(set_context(self, kdata)
 
@@ -167,6 +185,8 @@ set_context(self, stock, query)
 
     :rtype: KData)")
 
+      .def("equal", &Indicator::equal)
+      .def("is_same", &Indicator::isSame)
       .def("get_imp", &Indicator::getImp)
       .def("__len__", &Indicator::size)
 
@@ -177,65 +197,65 @@ set_context(self, stock, query)
       .def(
         "to_np",
         [](const Indicator& self) {
-            py::array_t<price_t> ret;
+            py::array_t<Indicator::value_t> ret;
             auto imp = self.getImp();
             HKU_IF_RETURN(!imp, ret);
-            ret = py::array_t<price_t>(self.size(), imp->data(0));
+            ret = py::array_t<Indicator::value_t>(self.size(), imp->data(0));
             return ret;
         },
         "转化为np.array，如果indicator存在多个值，只返回第一个")
 
       .def(py::self + py::self)
-      .def(py::self + price_t())
-      .def(price_t() + py::self)
+      .def(py::self + Indicator::value_t())
+      .def(Indicator::value_t() + py::self)
 
       .def(py::self - py::self)
-      .def(py::self - price_t())
-      .def(price_t() - py::self)
+      .def(py::self - Indicator::value_t())
+      .def(Indicator::value_t() - py::self)
 
       .def(py::self * py::self)
-      .def(py::self * price_t())
-      .def(price_t() * py::self)
+      .def(py::self * Indicator::value_t())
+      .def(Indicator::value_t() * py::self)
 
       .def(py::self / py::self)
-      .def(py::self / price_t())
-      .def(price_t() / py::self)
+      .def(py::self / Indicator::value_t())
+      .def(Indicator::value_t() / py::self)
 
       .def(py::self == py::self)
-      .def(py::self == price_t())
-      .def(price_t() == py::self)
+      .def(py::self == Indicator::value_t())
+      .def(Indicator::value_t() == py::self)
 
       .def(py::self != py::self)
-      .def(py::self != price_t())
-      .def(price_t() != py::self)
+      .def(py::self != Indicator::value_t())
+      .def(Indicator::value_t() != py::self)
 
       .def(py::self >= py::self)
-      .def(py::self >= price_t())
-      .def(price_t() >= py::self)
+      .def(py::self >= Indicator::value_t())
+      .def(Indicator::value_t() >= py::self)
 
       .def(py::self <= py::self)
-      .def(py::self <= price_t())
-      .def(price_t() <= py::self)
+      .def(py::self <= Indicator::value_t())
+      .def(Indicator::value_t() <= py::self)
 
       .def(py::self > py::self)
-      .def(py::self > price_t())
-      .def(price_t() > py::self)
+      .def(py::self > Indicator::value_t())
+      .def(Indicator::value_t() > py::self)
 
       .def(py::self < py::self)
-      .def(py::self < price_t())
-      .def(price_t() < py::self)
+      .def(py::self < Indicator::value_t())
+      .def(Indicator::value_t() < py::self)
 
       .def(py::self % py::self)
-      .def(py::self % price_t())
-      .def(price_t() % py::self)
+      .def(py::self % Indicator::value_t())
+      .def(Indicator::value_t() % py::self)
 
       .def(py::self & py::self)
-      .def(py::self & price_t())
-      .def(price_t() & py::self)
+      .def(py::self & Indicator::value_t())
+      .def(Indicator::value_t() & py::self)
 
       .def(py::self | py::self)
-      .def(py::self | price_t())
-      .def(price_t() | py::self)
+      .def(py::self | Indicator::value_t())
+      .def(Indicator::value_t() | py::self)
 
         DEF_PICKLE(Indicator);
 }

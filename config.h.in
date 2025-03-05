@@ -4,6 +4,9 @@
 
 // clang-format off
 
+// Debug 模式
+#define HKU_DEBUG_MODE ${HKU_DEBUG_MODE}
+
 // support serialization
 #define HKU_SUPPORT_SERIALIZATION  ${SUPPORT_SERIALIZATION}
 
@@ -16,23 +19,11 @@
 // 检查下标越界
 #define CHECK_ACCESS_BOUND ${CHECK_ACCESS_BOUND}
 
-// 默认激活的日志级别
-#define LOG_ACTIVE_LEVEL ${LOG_ACTIVE_LEVEL}
-
-// 是否使用 spdlog
-#define USE_SPDLOG_LOGGER ${USE_SPDLOG_LOGGER}
-
-// 使用异步 logger
-#define HKU_USE_SPDLOG_ASYNC_LOGGER ${USE_SPDLOG_ASYNC_LOGGER}
-
-// spdlog默认日志级别
-#define SPDLOG_ACTIVE_LEVEL ${LOG_ACTIVE_LEVEL}
-
-// 关闭 HKU_ASSERT
-#define HKU_DISABLE_ASSERT ${HKU_DISABLE_ASSERT}
-
 // 启用MSVC内存泄漏检查
 #define ENABLE_MSVC_LEAK_DETECT ${ENABLE_MSVC_LEAK_DETECT}
+
+// 启用内存泄漏检测，用于 linux 系统
+#define HKU_ENABLE_LEAK_DETECT ${HKU_ENABLE_LEAK_DETECT}
 
 // 启用发送用户使用信息
 #define HKU_ENABLE_SEND_FEEDBACK ${HKU_ENABLE_SEND_FEEDBACK}
@@ -48,6 +39,12 @@
 
 // 启用通达信本地 K线数据引擎
 #define HKU_ENABLE_TDX_KDATA ${HKU_ENABLE_TDX_KDATA}
+
+// 使用低精度版本，Indicator 使用 float 类型进行计算
+#define HKU_USE_LOW_PRECISION ${HKU_USE_LOW_PRECISION}
+
+// 使用 TA-Lib
+#define HKU_ENABLE_TA_LIB ${HKU_ENABLE_TA_LIB}
 
 // clang-format on
 

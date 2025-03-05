@@ -9,10 +9,8 @@ target("core")
     --     --set_enable(false) --set_enable(false)会彻底禁用这个target，连target的meta也不会被加载，vcproj不会保留它
     -- end
 
-    add_options("stackstrace")
-
     add_deps("hikyuu")
-    add_packages("boost", "fmt", "spdlog", "flatbuffers", "pybind11", "cpp-httplib")
+    add_packages("boost", "fmt", "spdlog", "flatbuffers", "pybind11")
     if is_plat("windows") then
         set_filename("core.pyd")
         add_cxflags("-wd4251")
@@ -22,6 +20,7 @@ target("core")
 
     if is_plat("windows") and get_config("kind") == "shared" then
         add_defines("HKU_API=__declspec(dllimport)")
+        add_defines("HKU_UTILS_API=__declspec(dllimport)")
         add_cxflags("-wd4566")
     end
     
@@ -31,10 +30,19 @@ target("core")
         add_cxflags("-Wno-error=parentheses-equality -Wno-error=missing-braces")
     end
 
+    if is_plat("linux", "cross") then 
+        add_rpathdirs("$ORIGIN", "$ORIGIN/cpp")
+    end
+
+    if is_plat("macosx") then
+        add_linkdirs("/usr/lib")
+
+        -- macosx 下不能主动链接 python，所以需要使用如下编译选项
+        add_shflags("-undefined dynamic_lookup")
+    end    
+
     add_includedirs("../hikyuu_cpp")
     add_files("./**.cpp")
-
-    add_rpathdirs("$ORIGIN", "$ORIGIN/lib", "$ORIGIN/../lib")
 
     on_load("windows", "linux", "macosx", function(target)
         import("lib.detect.find_tool")
@@ -66,29 +74,25 @@ target("core")
         -- get python include directory.
         local pydir = nil;
         if os.getenv("CONDA_PREFIX") ~= nil then
-          local py3config = os.getenv("CONDA_PREFIX") .. "/bin/python3-config"
-          pydir = try { function () return os.iorun(py3config .. " --includes"):trim() end }
+            local py3config = os.getenv("CONDA_PREFIX") .. "/bin/python3-config"
+            pydir = os.iorun(py3config .. " --includes"):trim()
         else
-          pydir = try { function () return os.iorun("python3-config --includes"):trim() end }
+            pydir = os.iorun("python3-config --includes"):trim()
         end
         assert(pydir, "python3-config not found!")
-        target:add("cxflags", pydir)   
+        target:add("cxflags", pydir)           
     end)
 
     after_build(function(target)
-        if is_plat("macosx") then
-            os.run(format("install_name_tool -change @rpath/libhikyuu.dylib @loader_path/libhikyuu.dylib %s/%s", target:targetdir(), "core.so"))
-        end
-
         local dst_dir = "$(projectdir)/hikyuu/cpp/"
         local dst_obj = dst_dir .. "core.so"
+
+        -- need xmake 445e43b40846b29b9abb1293b32b27b7104f54fa
         if not is_plat("cross") then
-            import("lib.detect.find_tool")
-            local python = assert(find_tool("python", {version = true}), "python not found, please install it first! note: python version must > 3.0")
-            local tmp = string.split(python.version, "%.")
-            dst_obj = dst_dir .. "core" .. tmp[1] .. tmp[2]
+          local stmt = [[python -c 'import sys; v = sys.version_info; print(str(v.major)+str(v.minor))']]
+          local python_version = os.iorun(stmt):trim()
+          dst_obj = dst_dir .. "core" ..  python_version
         end
-        -- print(dst_obj)
 
         if is_plat("windows") then
             os.cp(target:targetdir() .. '/core.pyd', dst_obj .. ".pyd")
@@ -96,12 +100,36 @@ target("core")
             os.cp(target:targetdir() .. '/hikyuu.lib', dst_dir)
         elseif is_plat("macosx") then
             os.cp(target:targetdir() .. '/core.so', dst_obj .. ".so")
-            os.cp(target:targetdir() .. '/libhikyuu.dylib', dst_dir)
+            os.cp(target:targetdir() .. '/*.dylib', dst_dir)
         else
+            os.trycp(target:targetdir() .. '/*.so', dst_dir)
             os.trycp(target:targetdir() .. '/*.so.*', dst_dir)
             if not is_plat("cross") then
-                os.trycp(target:targetdir() .. '/*.so', dst_obj .. ".so")
+                os.trymv(dst_dir .. '/core.so', dst_obj .. ".so")
             end
+        end
+
+        if is_plat("macosx") then
+            dst_obj = dst_obj .. ".so"
+            for _, filepath in ipairs(os.files(dst_dir .. "/*.dylib")) do
+                -- print(path.filename(filepath))
+                local filename = path.filename(filepath)
+                os.run(format("install_name_tool -change @rpath/%s @loader_path/%s %s", filename, filename, dst_obj))
+            end
+            os.run(format("install_name_tool -change libssl.3.dylib @loader_path/libssl.3.dylib %s", dst_obj))
+            os.run(format("install_name_tool -change libcrypto.3.dylib @loader_path/libcrypto.3.dylib %s", dst_obj))
+
+            if get_config("kind") == "shared" then
+                dst_obj = dst_dir .. "libhikyuu.dylib"
+                os.run(format("install_name_tool -change libssl.3.dylib @loader_path/libssl.3.dylib %s", dst_obj))
+                os.run(format("install_name_tool -change libcrypto.3.dylib @loader_path/libcrypto.3.dylib %s", dst_obj))
+            else
+                os.cp(target:targetdir() .. '/*.a', dst_dir)
+            end
+
+            filename = "libmysqlclient.21.dylib"
+            os.run(format("install_name_tool -change @loader_path/../lib/libssl.3.dylib @loader_path/libssl.3.dylib %s", dst_dir .. filename))
+            os.run(format("install_name_tool -change @loader_path/../lib/libcrypto.3.dylib @loader_path/libcrypto.3.dylib %s", dst_dir .. filename))
         end
     end)
 

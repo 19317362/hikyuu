@@ -133,8 +133,12 @@
  * @details 交易系统框架
  * @ingroup TradeSystem
  *
- * @defgroup SystemInstance SystemInstance 系统实例
- * @details 系统实例
+ * @defgroup MultiFactor MultiFactor 合成多因子
+ * @details 合成多因子
+ * @ingroup TradeSystem
+ *
+ * @defgroup Strategy Strategy 策略运行时
+ * @details 策略运行时
  * @ingroup Hikyuu
  *
  * @defgroup Agent Agent 对外数据接收发送代理
@@ -151,9 +155,6 @@
  * @ingroup Utilities
  *
  * @defgroup ThreadPool Thread Pool 线程池
- * @ingroup Utilities
- *
- * @defgroup TaskGroup Task Group 并行任务组
  * @ingroup Utilities
  */
 

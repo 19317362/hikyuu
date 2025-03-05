@@ -2,10 +2,13 @@
 # -*- coding: utf8 -*-
 # cp936
 
+import os
 import logging
+import logging.handlers
 import traceback
 import time
 import functools
+import multiprocessing
 
 
 # 统计函数运行时间
@@ -25,9 +28,30 @@ def spend_time(func):
 
 FORMAT = '%(asctime)-15s [%(levelname)s] %(message)s [%(name)s::%(funcName)s]'
 logging.basicConfig(format=FORMAT, level=logging.INFO)
-
 hku_logger_name = 'hikyuu'
 hku_logger = logging.getLogger(hku_logger_name)
+
+_usrdir = os.path.expanduser("~")
+if not os.path.lexists(f"{_usrdir}/.hikyuu"):
+    os.makedirs(f"{_usrdir}/.hikyuu")
+_logfile = logging.handlers.RotatingFileHandler(
+    f"{_usrdir}/.hikyuu/hikyuu_py.log", maxBytes=10240, backupCount=3, encoding="utf-8")
+_logfile.setFormatter(logging.Formatter(FORMAT))
+_logfile.setLevel(logging.WARN)
+hku_logger.addHandler(_logfile)
+
+g_hku_logger_lock = multiprocessing.Lock()
+
+
+def set_my_logger_file(file_name):
+    global _logfile
+    with g_hku_logger_lock:
+        hku_logger.removeHandler(_logfile)
+        _logfile = logging.handlers.RotatingFileHandler(
+            file_name, maxBytes=10240, backupCount=3, encoding="utf-8")
+        _logfile.setFormatter(logging.Formatter(FORMAT))
+        _logfile.setLevel(logging.WARN)
+        hku_logger.addHandler(_logfile)
 
 
 def get_default_logger():
@@ -35,14 +59,12 @@ def get_default_logger():
 
 
 def class_logger(cls, enable=False):
-    #logger = logging.getLogger("{}.{}".format(cls.__module__, cls.__name__))
+    # logger = logging.getLogger("{}.{}".format(cls.__module__, cls.__name__))
     logger = logging.getLogger("{}".format(cls.__name__))
     if enable == 'debug':
         logger.setLevel(logging.DEBUG)
     elif enable == 'info':
         logger.setLevel(logging.INFO)
-    cls._should_log_debug = logger.isEnabledFor(logging.DEBUG)
-    cls._should_log_info = logger.isEnabledFor(logging.INFO)
     cls.logger = logger
 
 
@@ -54,7 +76,7 @@ def add_class_logger_handler(class_list, level=logging.INFO, handler=None):
     :param handler: logging handler
     """
     for cls in class_list:
-        #logger = logging.getLogger("{}.{}".format(cls.__module__, cls.__name__))
+        # logger = logging.getLogger("{}.{}".format(cls.__module__, cls.__name__))
         logger = logging.getLogger("{}".format(cls.__name__))
         if handler:
             logger.addHandler(handler)
@@ -88,7 +110,8 @@ def hku_warn(msg, *args, **kwargs):
     if logger:
         logger.warning("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
     else:
-        hku_logger.warning("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+        with g_hku_logger_lock:
+            hku_logger.warning("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
 
 
 def hku_error(msg, *args, **kwargs):
@@ -97,7 +120,8 @@ def hku_error(msg, *args, **kwargs):
     if logger:
         logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
     else:
-        hku_logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+        with g_hku_logger_lock:
+            hku_logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
 
 
 def hku_fatal(msg, *args, **kwargs):
@@ -106,7 +130,8 @@ def hku_fatal(msg, *args, **kwargs):
     if logger:
         logger.critical("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
     else:
-        hku_logger.critical("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+        with g_hku_logger_lock:
+            hku_logger.critical("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
 
 
 def hku_debug_if(exp, msg, *args, **kwargs):
@@ -146,7 +171,9 @@ def hku_warn_if(exp, msg, *args, **kwargs):
         if logger:
             logger.warning("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
         else:
-            hku_logger.warning("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+            with g_hku_logger_lock:
+                hku_logger.warning("{} [{}] ({}:{})".format(msg.format(
+                    *args, **kwargs), st.name, st.filename, st.lineno))
         if callback:
             callback()
 
@@ -159,7 +186,8 @@ def hku_error_if(exp, msg, *args, **kwargs):
         if logger:
             logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
         else:
-            hku_logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+            with g_hku_logger_lock:
+                hku_logger.error("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
         if callback:
             callback()
 
@@ -172,7 +200,9 @@ def hku_fatal_if(exp, msg, *args, **kwargs):
         if logger:
             logger.critical("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
         else:
-            hku_logger.critical("{} [{}] ({}:{})".format(msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
+            with g_hku_logger_lock:
+                hku_logger.critical("{} [{}] ({}:{})".format(
+                    msg.format(*args, **kwargs), st.name, st.filename, st.lineno))
         if callback:
             callback()
 
@@ -194,7 +224,7 @@ def with_trace(level=logging.INFO):
 
 def capture_multiprocess_all_logger(queue, level=None):
     """重设所有子进程中的 logger 输出指定的 queue，并重设level
-    
+
     @param multiprocessing.Queue queue 指定的 mp Queue
     @param level 日志输出等级, None为保持原有等级
     """
@@ -206,3 +236,29 @@ def capture_multiprocess_all_logger(queue, level=None):
         logger.addHandler(qh)
         if level is not None:
             logger.setLevel(level)
+
+# Temporary change logger level
+# https://docs.python.org/3/howto/logging-cookbook.html
+
+
+class LoggingContext:
+    def __init__(self, logger, level=None, handler=None, close=True):
+        self.logger = logger
+        self.level = level
+        self.handler = handler
+        self.close = close
+
+    def __enter__(self):
+        if self.level is not None:
+            self.old_level = self.logger.level
+            self.logger.setLevel(self.level)
+        if self.handler:
+            self.logger.addHandler(self.handler)
+
+    def __exit__(self, et, ev, tb):
+        if self.level is not None:
+            self.logger.setLevel(self.old_level)
+        if self.handler:
+            self.logger.removeHandler(self.handler)
+        if self.handler and self.close:
+            self.handler.close()

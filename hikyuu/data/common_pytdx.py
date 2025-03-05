@@ -27,24 +27,20 @@ from concurrent import futures
 from pytdx.hq import TdxHq_API
 from pytdx.config.hosts import hq_hosts
 
-# hq_hosts = [
-#     ('上海双线主站1', '47.103.48.45', 7709),
-#     ('上海双线主站2', '47.103.86.229', 7709),
-#     ('上海双线主站3', '47.103.88.146', 7709),
-#     ('上海电信主站z1', '180.153.18.170', 7709),
-#     ('上海电信主站z2', '180.153.18.171', 7709),
-#     ('上海电信主站z3', '180.153.39.51', 7709),
-#     ('上海电信主站z4', '58.34.106.207', 7709),
-#     ('上海移动主站z1', '120.253.221.207', 7709),
-#     ('上海电信主站z80', '180.153.18.172', 7709),
-#     ('深圳双线主站1', '120.79.60.82', 7709),
-#     ('深圳双线主站2', '47.112.129.66', 7709),
-#     ('北京双线主站1', '39.98.234.173', 7709),
-#     ('北京双线主站2', '39.98.198.249', 7709),
-#     ('北京双线主站3', '39.100.68.59', 7709),
-#     ('北京联通主站z1', '202.108.254.67', 7709),
-#     ('北京移动主站z1', '111.13.112.206', 7709),
-# ]
+try:
+    # Try to get the hosts configuration in the user directory
+    import os
+    import sys
+    import importlib
+    config_path = "{}/.hikyuu".format(os.path.expanduser('~'))
+    host_file = f"{config_path}/hosts.py"
+    if os.path.exists(host_file):
+        if config_path not in sys.path:
+            sys.path.append(config_path)
+        tmp = importlib.import_module(f'hosts')
+        hq_hosts = tmp.hq_hosts
+except:
+    pass
 
 
 def to_pytdx_market(market):
@@ -53,21 +49,21 @@ def to_pytdx_market(market):
     return pytdx_market[market.upper()]
 
 
-def ping(ip, port=7709, multithread=False):
+def ping(ip, port=7709, multithread=False, timeout=1):
     api = TdxHq_API(multithread=multithread)
     success = False
     starttime = time.time()
+    success = False
     try:
-        with api.connect(ip, port, time_out=1):
+        if api.connect(ip, port, time_out=timeout):
             # x = api.get_security_count(0)
             # x = api.get_index_bars(7, 1, '000001', 800, 100)
             x = api.get_security_bars(7, 0, '000001', 800, 100)
             if x:
                 success = True
-
     except Exception as e:
-        success = False
-
+        print(e)
+        pass
     endtime = time.time()
     return (success, endtime - starttime, ip, port)
 
@@ -81,7 +77,23 @@ def search_best_tdx():
         res = executor.map(ping2, hosts, timeout=2)
     x = [i for i in res if i[0] == True]
     x.sort(key=lambda item: item[1])
-    return x
+
+    # 校验 host 是否存在错误，取同样数据，相同结果最多的集合
+    values = {}
+    for host in x:
+        api = TdxHq_API(multithread=False)
+        if api.connect(host[2], host[3]):
+            x = api.get_security_bars(9, 0, '159915', 0, 1)
+            if x and len(x) > 0:
+                if x[0]['close'] not in values:
+                    values[x[0]['close']] = [host]
+                else:
+                    values[x[0]['close']].append(host)
+    ret = []
+    for _, host in values.items():
+        if len(host) > len(ret):
+            ret = host
+    return ret
 
 
 def pytdx_get_day_trans(api, pymarket, code, date):

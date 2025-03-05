@@ -6,7 +6,7 @@
  */
 
 #include "doctest/doctest.h"
-#include <hikyuu/Log.h>
+#include "hikyuu/utilities/Log.h"
 #include <hikyuu/utilities/Parameter.h>
 #include <hikyuu/StockManager.h>
 
@@ -105,6 +105,13 @@ TEST_CASE("test_Parameter") {
     Stock stk2 = p.get<Stock>("stk");
     CHECK(stk == stk2);
 
+    /** @arg 测试使用 Block 做为参数 */
+    Block blk;
+    p = Parameter();
+    p.set<Block>("blk", blk);
+    Block blk2 = p.get<Block>("blk");
+    CHECK(blk == blk2);
+
     /** @arg 测试使用 KQuery 做为参数 */
     KQuery query(10, 20);
     p = Parameter();
@@ -144,6 +151,22 @@ TEST_CASE("test_Parameter") {
     }
 }
 
+/** @par 验证对 KData 的获取 */
+TEST_CASE("test_Parameter_KData") {
+    KData k = getKData("sh000001", KQuery(-10));
+    CHECK_EQ(k.size(), 10);
+
+    Parameter param;
+    param.set<KData>("k", k);
+
+    /** @arg 验证是否可以多次读取 KData，防止移动语义影响 */
+    auto ek = param.get<KData>("k");
+    CHECK_EQ(ek, k);
+
+    auto ek2 = param.get<KData>("k");
+    CHECK_EQ(ek2, k);
+}
+
 #if HKU_SUPPORT_SERIALIZATION
 /** @par 检测点 */
 TEST_CASE("test_Parameter_serialize") {
@@ -160,6 +183,7 @@ TEST_CASE("test_Parameter_serialize") {
     KData k = stk.getKData(q);
     DatetimeList d = k.getDatetimeList();
     p1.set<Stock>("stk", stk);
+    p1.set<Block>("blk", Block());
     p1.set<KQuery>("query", q);
     p1.set<KData>("kdata", k);
     p1.set<DatetimeList>("dates", d);
@@ -188,6 +212,7 @@ TEST_CASE("test_Parameter_serialize") {
     CHECK(p2.get<double>("p") == 0.101);
     CHECK(p2.get<string>("string") == "This is string!");
     CHECK(p2.get<Stock>("stk") == stk);
+    CHECK(p2.get<Block>("blk") == Block());
     CHECK(p2.get<KQuery>("query") == q);
     KData k2 = p2.get<KData>("kdata");
     CHECK(k.size() == k2.size());

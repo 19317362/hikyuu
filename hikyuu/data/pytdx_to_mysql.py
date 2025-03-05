@@ -122,6 +122,21 @@ def import_stock_name(connect, api, market, quotations=None):
     """
     cur = connect.cursor()
 
+    deSet = set()  # 记录退市证券
+    if market == MARKET.SH:
+        df = ak.stock_info_sh_delist()
+        l = df[['公司代码', '公司简称']].to_dict(orient='records') if not df .empty else []
+        for stock in l:
+            code = str(stock['公司代码'])
+            deSet.add(code)
+    elif market == MARKET.SZ:
+        for t in ['暂停上市公司', '终止上市公司']:
+            df = ak.stock_info_sz_delist(t)
+            l = df[['证券代码', '证券简称']].to_dict(orient='records') if not df.empty else []
+            for stock in l:
+                code = str(stock['证券代码'])
+                deSet.add(code)
+
     newStockDict = {}
     stk_list = get_stk_code_name_list(market)
     if not stk_list:
@@ -131,7 +146,9 @@ def import_stock_name(connect, api, market, quotations=None):
     if not quotations or "fund" in [v.lower() for v in quotations]:
         stk_list.extend(get_fund_code_name_list(market))
     for stock in stk_list:
-        newStockDict[str(stock["code"])] = stock["name"]
+        code = str(stock["code"])
+        if code not in deSet:
+            newStockDict[code] = stock["name"]
 
     marketid = get_marketid(connect, market)
 
@@ -156,7 +173,8 @@ def import_stock_name(connect, api, market, quotations=None):
         oldStockDict[oldcode] = oldstockid
 
         # 新的代码表中无此股票，则置为无效
-        if (oldvalid == 1) and (oldcode not in newStockDict):
+        # if (oldvalid == 1) and (oldcode not in newStockDict):
+        if (oldvalid == 1) and ((oldcode not in newStockDict) or oldcode in deSet):
             cur.execute(
                 "update `hku_base`.`stock` set valid=0 where stockid=%i" % oldstockid
             )
@@ -313,11 +331,15 @@ def import_one_stock_data(
 
         for bar in bar_list:
             try:
-                tmp = datetime.date(bar["year"], bar["month"], bar["day"])
-                bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * 10000
-                if ktype != "DAY":
-                    bar_datetime += bar["hour"] * 100 + bar["minute"]
-            except:
+                if ktype == "DAY":
+                    tmp = datetime.date(bar["year"], bar["month"], bar["day"])
+                    bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * 10000
+                else:
+                    tmp = datetime.datetime(bar["year"], bar["month"], bar["day"], bar['hour'], bar['minute'])
+                    bar_datetime = (tmp.year * 10000 + tmp.month * 100 + tmp.day) * \
+                        10000 + bar["hour"] * 100 + bar["minute"]
+            except Exception as e:
+                hku_error("Failed translate datetime: {}, from {}! {}".format(bar, api.ip, e))
                 continue
 
             if (
@@ -413,7 +435,7 @@ def import_data(
 
     total = len(stock_list)
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0:
+        if stock[3] == 0 or len(stock[2]) != 6:
             if progress:
                 progress(i, total)
             continue
@@ -466,7 +488,7 @@ def get_trans_table(connect, market, code):
                     `buyorsell` INT NOT NULL,
                     PRIMARY KEY (`date`)
                 )
-                COLLATE='utf8_general_ci'
+                COLLATE='utf8mb4_general_ci'
                 ENGINE=MyISAM
                 ;
               """.format(
@@ -559,8 +581,9 @@ def import_trans(
 
     stock_list = get_stock_list(connect, market, quotations)
     total = len(stock_list)
+    a_stktype_list = get_a_stktype_list()
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0 or stock[4] not in (STOCKTYPE.A, STOCKTYPE.B, STOCKTYPE.GEM):
+        if stock[3] == 0 or len(stock[2]) != 6 or stock[4] not in a_stktype_list:
             if progress:
                 progress(i, total)
             continue
@@ -602,7 +625,7 @@ def get_time_table(connect, market, code):
                     `vol` DOUBLE NOT NULL,
                     PRIMARY KEY (`date`)
                 )
-                COLLATE='utf8_general_ci'
+                COLLATE='utf8mb4_general_ci'
                 ENGINE=MyISAM
                 ;
               """.format(
@@ -685,7 +708,7 @@ def import_time(connect, market, quotations, api, dest_dir, max_days=9000, progr
     stock_list = get_stock_list(connect, market, quotations)
     total = len(stock_list)
     for i, stock in enumerate(stock_list):
-        if stock[3] == 0:
+        if stock[3] == 0 or len(stock[2]) != 6:
             if progress:
                 progress(i, total)
             continue

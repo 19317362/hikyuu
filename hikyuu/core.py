@@ -17,7 +17,11 @@ try:
         from .cpp.core311 import *
     elif sys.version_info[1] == 12:
         from .cpp.core312 import *
+    elif sys.version_info[1] == 13:
+        from .cpp.core313 import *
     else:
         from .cpp.core import *
 except:
     from .cpp.core import *
+
+__version__ = get_version()

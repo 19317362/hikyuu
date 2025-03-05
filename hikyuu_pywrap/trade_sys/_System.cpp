@@ -15,48 +15,7 @@ using namespace hku;
 #pragma warning(disable : 4267)
 #endif
 
-void (System::*run_1)(const KQuery&, bool) = &System::run;
-void (System::*run_2)(const KData&, bool) = &System::run;
-void (System::*run_3)(const Stock&, const KQuery&, bool reset) = &System::run;
-
-TradeRecord (System::*runMoment_1)(const Datetime&) = &System::runMoment;
-
 void export_System(py::module& m) {
-    m.def(
-      "SYS_Simple", SYS_Simple, py::arg("tm") = TradeManagerPtr(),
-      py::arg("mm") = MoneyManagerPtr(), py::arg("ev") = EnvironmentPtr(),
-      py::arg("cn") = ConditionPtr(), py::arg("sg") = SignalPtr(), py::arg("st") = StoplossPtr(),
-      py::arg("tp") = StoplossPtr(), py::arg("pg") = ProfitGoalPtr(), py::arg("sp") = SlippagePtr(),
-      R"(SYS_Simple([tm=None, mm=None, ev=None, cn=None, sg=None, st=None, tp=None, pg=None, sp=None])
-
-  创建简单系统实例（每次交易不进行多次加仓或减仓，即每次买入后在卖出时全部卖出），  系统实例在运行时(调用run方法），至少需要一个配套的交易管理实例、一个资金管理策略
-  和一个信号指示器），可以在创建系统实例后进行指定。如果出现调用run时没有任何输出，
-  且没有正确结果的时候，可能是未设置tm、sg、mm。进行回测时，使用 run 方法，如::
-    
-        #创建模拟交易账户进行回测，初始资金30万
-        my_tm = crtTM(init_cash = 300000)
-
-        #创建信号指示器（以5日EMA为快线，5日EMA自身的10日EMA作为慢线，快线向上穿越慢线时买入，反之卖出）
-        my_sg = SG_Flex(EMA(C, n=5), slow_n=10)
-
-        #固定每次买入1000股
-        my_mm = MM_FixedCount(1000)
-
-        #创建交易系统并运行
-        sys = SYS_Simple(tm = my_tm, sg = my_sg, mm = my_mm)
-        sys.run(sm['sz000001'], Query(-150))
-    
-    :param TradeManager tm: 交易管理实例 
-    :param MoneyManager mm: 资金管理策略
-    :param EnvironmentBase ev: 市场环境判断策略
-    :param ConditionBase cn: 系统有效条件
-    :param SignalBase sg: 信号指示器
-    :param StoplossBase st: 止损策略
-    :param StoplossBase tp: 止盈策略
-    :param ProfitGoalBase pg: 盈利目标策略
-    :param SlippageBase sp: 移滑价差算法
-    :return: system实例)");
-
     m.def("get_system_part_name", getSystemPartName, R"(get_system_part_name(part)
 
     获取部件的字符串名称
@@ -81,6 +40,7 @@ void export_System(py::module& m) {
     :param str part_name: 系统部件的字符串名称，参见：:py:func:`getSystemPartName`
     :rtype: System.Part)");
 
+    //--------------------------------------------------------------------------------------
     py::class_<TradeRequest>(
       m, "TradeRequest",
       R"(交易请求记录。系统内部在实现延迟操作时登记的交易请求信息。暴露该结构的主要目的是用于
@@ -90,6 +50,9 @@ void export_System(py::module& m) {
 本身的运行没有影响。)")
 
       .def(py::init<>())
+      .def("__str__", to_py_str<TradeRequest>)
+      .def("__repr__", to_py_str<TradeRequest>)
+
       .def_readwrite("valid", &TradeRequest::valid, "该交易请求记录是否有效（True | False）")
       .def_readwrite("business", &TradeRequest::business,
                      "交易业务类型，参见：:py:class:`hikyuu.trade_manage.BUSINESS`")
@@ -100,6 +63,7 @@ void export_System(py::module& m) {
       .def_readwrite("count", &TradeRequest::count, "因操作失败，连续延迟的次数")
         DEF_PICKLE(TradeRequest);
 
+    //--------------------------------------------------------------------------------------
     py::class_<System, SystemPtr>(m, "System",
                                   R"(系统基类。需要扩展或实现更复杂的系统交易行为，可从此类继承。
 
@@ -117,6 +81,7 @@ void export_System(py::module& m) {
   - cn_open_position=False (bool): 是否使用系统有效性条件进行初始建仓)")
 
       .def(py::init<const string&>())
+      .def(py::init<const System&>())
       .def(py::init<const TradeManagerPtr&, const MoneyManagerPtr&, const EnvironmentPtr&,
                     const ConditionPtr&, const SignalPtr&, const StoplossPtr&, const StoplossPtr&,
                     const ProfitGoalPtr&, const SlippagePtr&, const string&>())
@@ -126,6 +91,7 @@ void export_System(py::module& m) {
       .def_property("name", py::overload_cast<>(&System::name, py::const_),
                     py::overload_cast<const string&>(&System::name), py::return_value_policy::copy,
                     "系统名称")
+      .def_property_readonly("query", &System::getQuery, py::return_value_policy::copy, "查询条件")
       .def_property("tm", &System::getTM, &System::setTM, "关联的交易管理实例")
       .def_property("to", &System::getTO, &System::setTO, "交易对象 KData")
       .def_property("mm", &System::getMM, &System::setMM, "资金管理策略")
@@ -154,6 +120,8 @@ void export_System(py::module& m) {
     :raises logic_error: Unsupported type! 不支持的参数类型)")
 
       .def("have_param", &System::haveParam, "是否存在指定参数")
+
+      .def("set_not_shared_all", &System::setNotSharedAll, "将所有组件设置为非共享")
 
       .def("get_stock", &System::getStock, R"(get_stock(self)
 
@@ -187,29 +155,140 @@ void export_System(py::module& m) {
       .def("get_buy_short_trade_request", &System::getBuyShortTradeRequest,
            py::return_value_policy::copy)
 
-      .def("reset", &System::reset, R"(reset(self, with_tm, with_ev)
+      .def("reset", &System::reset,
+           R"(reset(self)
 
-    复位操作。TM、EV是和具体系统无关的策略组件，可以在不同的系统中进行共享，复位将引起系统运行时被重新清空并计算。尤其是在共享TM时需要注意！
+    复位，但不包括已有的交易对象，以及共享的部件。)")
 
-    :param bool with_tm: 是否复位TM组件
-    :param bool with_ev: 是否复位EV组件)")
+      .def("force_reset_all", &System::forceResetAll,
+           R"(force_reset_all(self)
 
-      .def("clone", &System::clone, R"(clone(self)
+    强制复位所有组件以及清空已有的交易对象，忽略组件的共享属性。)")
 
-    克隆操作。)")
+      .def("clone", &System::clone,
+           R"(clone(self)
 
-      .def("run", run_1, py::arg("query"), py::arg("reset") = true)
-      .def("run", run_2, py::arg("kdata"), py::arg("reset") = true)
-      .def("run", run_3, py::arg("stock"), py::arg("query"), py::arg("reset") = true,
+    克隆操作，会依据部件的共享特性进行克隆，共享部件不进行实际的克隆操作，保持共享。)")
+
+      .def("run", py::overload_cast<const KQuery&, bool, bool>(&System::run), py::arg("query"),
+           py::arg("reset") = true, py::arg("reset_all") = false)
+      .def("run", py::overload_cast<const KData&, bool, bool>(&System::run), py::arg("kdata"),
+           py::arg("reset") = true, py::arg("reset_all") = false)
+      .def("run", py::overload_cast<const Stock&, const KQuery&, bool, bool>(&System::run),
+           py::arg("stock"), py::arg("query"), py::arg("reset") = true,
+           py::arg("reset_all") = false,
            R"(run(self, stock, query[, reset=True])
   
     运行系统，执行回测
 
     :param Stock stock: 交易的证券
     :param Query query: K线数据查询条件
-    :param bool reset: 是否同时复位所有组件，尤其是tm实例)")
+    :param bool reset: 执行前是否依据系统部件共享属性复位
+    :param bool reset_all: 强制复位所有部件)")
 
       .def("ready", &System::readyForRun)
 
         DEF_PICKLE(System);
+
+    //--------------------------------------------------------------------------------------
+    m.def(
+      "SYS_Simple",
+      [](py::object tm = py::none(), py::object mm = py::none(), py::object ev = py::none(),
+         py::object cn = py::none(), py::object sg = py::none(), py::object st = py::none(),
+         py::object tp = py::none(), py::object pg = py::none(), py::object sp = py::none()) {
+          TradeManagerPtr ctm;
+          if (!tm.is_none()) {
+              ctm = tm.cast<TradeManagerPtr>();
+          }
+          MoneyManagerPtr cmm;
+          if (!mm.is_none()) {
+              cmm = mm.cast<MoneyManagerPtr>();
+          }
+          EnvironmentPtr cev;
+          if (!ev.is_none()) {
+              cev = ev.cast<EnvironmentPtr>();
+          }
+          ConditionPtr ccn;
+          if (!cn.is_none()) {
+              ccn = cn.cast<ConditionPtr>();
+          }
+          SignalPtr csg;
+          if (!sg.is_none()) {
+              csg = sg.cast<SignalPtr>();
+          }
+          StoplossPtr cst;
+          if (!st.is_none()) {
+              cst = st.cast<StoplossPtr>();
+          }
+          StoplossPtr ctp;
+          if (!tp.is_none()) {
+              ctp = tp.cast<StoplossPtr>();
+          }
+          ProfitGoalPtr cpg;
+          if (!pg.is_none()) {
+              cpg = pg.cast<ProfitGoalPtr>();
+          }
+          SlippagePtr csp;
+          if (!sp.is_none()) {
+              csp = sp.cast<SlippagePtr>();
+          }
+          return SYS_Simple(ctm, cmm, cev, ccn, csg, cst, ctp, cpg, csp);
+      },
+      py::arg("tm") = py::none(), py::arg("mm") = py::none(), py::arg("ev") = py::none(),
+      py::arg("cn") = py::none(), py::arg("sg") = py::none(), py::arg("st") = py::none(),
+      py::arg("tp") = py::none(), py::arg("pg") = py::none(), py::arg("sp") = py::none(),
+      R"(SYS_Simple([tm=None, mm=None, ev=None, cn=None, sg=None, st=None, tp=None, pg=None, sp=None])
+
+  创建简单系统实例（每次交易不进行多次加仓或减仓，即每次买入后在卖出时全部卖出），  系统实例在运行时(调用run方法），至少需要一个配套的交易管理实例、一个资金管理策略
+  和一个信号指示器），可以在创建系统实例后进行指定。如果出现调用run时没有任何输出，
+  且没有正确结果的时候，可能是未设置tm、sg、mm。进行回测时，使用 run 方法，如::
+    
+        #创建模拟交易账户进行回测，初始资金30万
+        my_tm = crtTM(init_cash = 300000)
+
+        #创建信号指示器（以5日EMA为快线，5日EMA自身的10日EMA作为慢线，快线向上穿越慢线时买入，反之卖出）
+        my_sg = SG_Flex(EMA(C, n=5), slow_n=10)
+
+        #固定每次买入1000股
+        my_mm = MM_FixedCount(1000)
+
+        #创建交易系统并运行
+        sys = SYS_Simple(tm = my_tm, sg = my_sg, mm = my_mm)
+        sys.run(sm['sz000001'], Query(-150))
+    
+    :param TradeManager tm: 交易管理实例 
+    :param MoneyManager mm: 资金管理策略
+    :param EnvironmentBase ev: 市场环境判断策略
+    :param ConditionBase cn: 系统有效条件
+    :param SignalBase sg: 信号指示器
+    :param StoplossBase st: 止损策略
+    :param StoplossBase tp: 止盈策略
+    :param ProfitGoalBase pg: 盈利目标策略
+    :param SlippageBase sp: 移滑价差算法
+    :return: system实例)");
+
+    m.def(
+      "SYS_WalkForward",
+      [](const py::sequence& candidate_sys_list, const TradeManagerPtr& tm, size_t train_len,
+         size_t test_len, const SelectorPtr& se, const TradeManagerPtr& train_tm) {
+          SystemList sys_list = python_list_to_vector<SystemPtr>(candidate_sys_list);
+          SelectorPtr c_se = se;
+          if (!c_se) {
+              c_se = SE_PerformanceOptimal();
+          }
+          return SYS_WalkForward(sys_list, tm, train_len, test_len, c_se, train_tm);
+      },
+      py::arg("sys_list"), py::arg("tm") = TradeManagerPtr(), py::arg("train_len") = 100,
+      py::arg("test_len") = 20, py::arg("se") = SelectorPtr(),
+      py::arg("train_tm") = TradeManagerPtr(),
+      R"(SYS_WalkForward(sys_list, tm, train_len, test_len, train_tm)
+
+  创建滚动寻优系统，当输入的候选系统列表中仅有一个候选系统时，即为滚动系统
+
+  :param sequence sys_list: 候选系统列表
+  :param TradeManager tm: 交易账户
+  :param int train_len: 滚动评估系统绩效时使用的数据长度
+  :param int test_len: 使用在 train_len 中选出的最优系统执行的数据长度
+  :param SelectorBase se: 寻优选择器，默认为按“帐户平均年收益率%”最大选择
+  :param TradeManager train_tm: 滚动评估时使用的交易账户, 为None时, 使用 tm 的拷贝进行评估)");
 }

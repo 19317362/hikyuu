@@ -4,7 +4,7 @@
  *  Created on: 2009-11-20
  *      Author: fasiondog
  */
-#include <cmath>
+
 #include "arithmetic.h"
 
 #if defined(_MSC_VER)
@@ -17,92 +17,12 @@
 
 namespace hku {
 
-double HKU_API roundEx(double number, int ndigits) {
-    // 切换至：ROUND_HALF_EVEN 银行家舍入法
-    double pow1, pow2, y, z;
-    double x = number;
-    if (ndigits >= 0) {
-        pow1 = pow(10.0, (double)ndigits);
-        pow2 = 1.0;
-        y = (x * pow1) * pow2;
-    } else {
-        pow1 = pow(10.0, (double)-ndigits);
-        pow2 = 1.0;
-        y = x / pow1;
-    }
-
-    z = round(y);
-    if (fabs(y - z) == 0.5)
-        /* halfway between two integers; use round-half-even */
-        z = 2.0 * round(y / 2.0);
-
-    if (ndigits >= 0)
-        z = (z / pow2) / pow1;
-    else
-        z *= pow1;
-
-    return z;
-}
-
-double HKU_API roundUp(double number, int ndigits) {
-    double f;
-    int i;
-    f = 1.0;
-    i = abs(ndigits);
-    while (--i >= 0) {
-        f = f * 10.0;
-    }
-
-    if (ndigits < 0) {
-        number /= f;
-    } else {
-        number *= f;
-    }
-
-    if (number >= 0.0) {
-        number = std::floor(number + 1.0);
-    } else {
-        number = std::ceil(number - 1.0);
-    }
-
-    if (ndigits < 0) {
-        number *= f;
-    } else {
-        number /= f;
-    }
-
-    return number;
-}
-
-double HKU_API roundDown(double number, int ndigits) {
-    double f;
-    int i;
-    f = 1.0;
-    i = abs(ndigits);
-    while (--i >= 0) {
-        f = f * 10.0;
-    }
-
-    if (ndigits < 0) {
-        number /= f;
-    } else {
-        number *= f;
-    }
-
-    if (number >= 0.0) {
-        number = std::floor(number);
-    } else {
-        number = std::ceil(number);
-    }
-
-    if (ndigits < 0) {
-        number *= f;
-    } else {
-        number /= f;
-    }
-
-    return number;
-}
+template double HKU_UTILS_API roundEx(double number, int ndigits);
+template float HKU_UTILS_API roundEx(float number, int ndigits);
+template double HKU_UTILS_API roundUp(double number, int ndigits);
+template float HKU_UTILS_API roundUp(float number, int ndigits);
+template double HKU_UTILS_API roundDown(double number, int ndigits);
+template float HKU_UTILS_API roundDown(float number, int ndigits);
 
 #if defined(_MSC_VER)
 /**
@@ -111,7 +31,7 @@ double HKU_API roundDown(double number, int ndigits) {
  * @return 以GB2312编码的字符串
  * @note 仅在Windows平台下生效
  */
-std::string HKU_API utf8_to_gb(const char *szinput) {
+std::string HKU_UTILS_API utf8_to_gb(const char *szinput) {
     wchar_t *strSrc;
     char *szRes;
     std::string nullStr;
@@ -147,7 +67,7 @@ std::string HKU_API utf8_to_gb(const char *szinput) {
     return result;
 }
 
-std::string HKU_API utf8_to_gb(const std::string &szinput) {
+std::string HKU_UTILS_API utf8_to_gb(const std::string &szinput) {
     return utf8_to_gb(szinput.c_str());
 }
 
@@ -157,7 +77,7 @@ std::string HKU_API utf8_to_gb(const std::string &szinput) {
  * @return 以UTF8编码的字符串
  * @note 仅在Windows平台下生效
  */
-std::string HKU_API gb_to_utf8(const char *szinput) {
+std::string HKU_UTILS_API gb_to_utf8(const char *szinput) {
     wchar_t *strSrc;
     char *szRes;
     std::string nullstr;
@@ -194,12 +114,12 @@ std::string HKU_API gb_to_utf8(const char *szinput) {
     return result;
 }
 
-std::string HKU_API gb_to_utf8(const std::string &szinput) {
+std::string HKU_UTILS_API gb_to_utf8(const std::string &szinput) {
     return gb_to_utf8(szinput.c_str());
 }
 
 #else /* else for defined(_MSC_VER) */
-std::string HKU_API utf8_to_gb(const std::string &szinput) {
+std::string HKU_UTILS_API utf8_to_gb(const std::string &szinput) {
     char *inbuf = const_cast<char *>(szinput.c_str());
     size_t inlen = strlen(inbuf);
     size_t outlen = inlen;
@@ -215,7 +135,7 @@ std::string HKU_API utf8_to_gb(const std::string &szinput) {
     return result;
 }
 
-std::string HKU_API gb_to_utf8(const std::string &szinput) {
+std::string HKU_UTILS_API gb_to_utf8(const std::string &szinput) {
     char *inbuf = const_cast<char *>(szinput.c_str());
     size_t inlen = strlen(inbuf);
     size_t outlen = inlen * 2;

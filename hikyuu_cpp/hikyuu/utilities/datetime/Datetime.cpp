@@ -11,18 +11,22 @@
 
 #include <fmt/format.h>
 #include "hikyuu/utilities/Null.h"
-#include "hikyuu/Log.h"
+#include "hikyuu/utilities/Log.h"
 #include "hikyuu/utilities/arithmetic.h"
 #include "Datetime.h"
 
 namespace hku {
 
-HKU_API std::ostream& operator<<(std::ostream& out, const Datetime& d) {
+HKU_UTILS_API std::ostream &operator<<(std::ostream &out, const Datetime &d) {
     out << d.str();
     return out;
 }
 
 Datetime Datetime::fromHex(uint64_t time) {
+    if (Null<unsigned long long>() == time) {
+        return Datetime();
+    }
+
     uint64_t second = 0xFFULL & time;
     uint64_t minute = (0xFF00ULL & time) >> 8;
     uint64_t hour = (0xFF0000ULL & time) >> 16;
@@ -88,23 +92,39 @@ Datetime::Datetime(unsigned long long datetime) {
     }
 }
 
-Datetime::Datetime(const std::string& ts) {
+Datetime::Datetime(const std::string &ts) {
+    HKU_CHECK(ts.size() >= 8, "Invalid datetime str: {}", ts);
+
     std::string timeStr(ts);
     trim(timeStr);
     if ("+infinity" == timeStr) {
         m_data = bt::ptime(bd::date(bd::pos_infin), bt::time_duration(0, 0, 0));
-    } else if (timeStr.size() <= 10) {
-        auto pos1 = timeStr.rfind("-");
-        auto pos2 = timeStr.rfind("/");
+        return;
+    }
+
+    to_upper(timeStr);
+    auto pos = timeStr.find('T');
+    if (pos != std::string::npos) {
+        m_data = bt::from_iso_string(timeStr);
+        return;
+    }
+
+    pos = timeStr.find(' ');
+    auto pos1 = timeStr.find('-');
+    auto pos2 = timeStr.find('/');
+    if (pos == std::string::npos) {
         m_data = (pos1 != std::string::npos || pos2 != std::string::npos)
                    ? bt::ptime(bd::from_string(timeStr), bt::time_duration(0, 0, 0))
                    : bt::ptime(bd::from_undelimited_string(timeStr), bt::time_duration(0, 0, 0));
-    } else {
-        to_upper(timeStr);
-        auto pos = timeStr.find("T");
-        m_data =
-          (pos != std::string::npos) ? bt::from_iso_string(timeStr) : bt::time_from_string(timeStr);
+        return;
     }
+
+    auto date_str = timeStr.substr(0, pos);
+    auto time_str = timeStr.substr(pos + 1);
+    m_data =
+      (pos1 != std::string::npos || pos2 != std::string::npos)
+        ? bt::time_from_string(timeStr)
+        : bt::ptime(bd::from_undelimited_string(date_str), bt::duration_from_string(time_str));
 }
 
 bool Datetime::isNull() const {
@@ -113,7 +133,7 @@ bool Datetime::isNull() const {
     return (m_data == null_date) ? true : false;
 }
 
-Datetime& Datetime::operator=(const Datetime& d) {
+Datetime &Datetime::operator=(const Datetime &d) {
     if (this == &d)
         return *this;
     m_data = d.m_data;
@@ -155,7 +175,7 @@ uint64_t Datetime::number() const noexcept {
         return (unsigned long long)year() * 100000000ULL +
                (unsigned long long)month() * 1000000ULL + (unsigned long long)day() * 10000ULL +
                (unsigned long long)hour() * 100ULL + (unsigned long long)minute();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -169,7 +189,7 @@ uint64_t Datetime::ym() const noexcept {
     try {
         HKU_IF_RETURN(isNull(), Null<unsigned long long>());
         return (unsigned long long)year() * 100ULL + (unsigned long long)month();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -184,7 +204,7 @@ uint64_t Datetime::ymd() const noexcept {
         HKU_IF_RETURN(isNull(), Null<unsigned long long>());
         return (unsigned long long)year() * 10000ULL + (unsigned long long)month() * 100ULL +
                (unsigned long long)day();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -199,7 +219,7 @@ uint64_t Datetime::ymdh() const noexcept {
         HKU_IF_RETURN(isNull(), Null<unsigned long long>());
         return (unsigned long long)year() * 1000000ULL + (unsigned long long)month() * 10000ULL +
                (unsigned long long)day() * 100ULL + (unsigned long long)hour();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -215,7 +235,7 @@ uint64_t Datetime::ymdhm() const noexcept {
         return (unsigned long long)year() * 100000000LL + (unsigned long long)month() * 1000000LL +
                (unsigned long long)day() * 10000LL + (unsigned long long)hour() * 100LL +
                (unsigned long long)minute();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -232,7 +252,7 @@ uint64_t Datetime::ymdhms() const noexcept {
                (unsigned long long)month() * 100000000ULL + (unsigned long long)day() * 1000000ULL +
                (unsigned long long)hour() * 10000ULL + (unsigned long long)minute() * 100ULL +
                (unsigned long long)second();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -255,7 +275,7 @@ uint64_t Datetime::hex() const noexcept {
         ret |= (low_y << 40);
         ret |= (high_y << 48);
         return ret;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -269,7 +289,7 @@ uint64_t Datetime::ticks() const noexcept {
         HKU_IF_RETURN(isNull(), Null<uint64_t>());
         TimeDelta d = (*this) - Datetime::min();
         return d.ticks();
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         HKU_ERROR(e.what());
         return Null<uint64_t>();
     } catch (...) {
@@ -337,7 +357,7 @@ Datetime Datetime::today() {
     return Datetime(x.year(), x.month(), x.day());
 }
 
-DatetimeList HKU_API getDateRange(const Datetime& start, const Datetime& end) {
+DatetimeList HKU_UTILS_API getDateRange(const Datetime &start, const Datetime &end) {
     DatetimeList result;
     bd::date start_day = start.date();
     bd::date end_day = end.date();

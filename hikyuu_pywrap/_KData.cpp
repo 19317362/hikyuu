@@ -12,8 +12,8 @@
 using namespace hku;
 namespace py = pybind11;
 
-KRecord (KData::*KData_getKRecord1)(size_t pos) const = &KData::getKRecord;
-KRecord (KData::*KData_getKRecord2)(Datetime datetime) const = &KData::getKRecord;
+const KRecord& (KData::*KData_getKRecord1)(size_t pos) const = &KData::getKRecord;
+const KRecord& (KData::*KData_getKRecord2)(Datetime datetime) const = &KData::getKRecord;
 
 void export_KData(py::module& m) {
     py::class_<KData>(
@@ -48,23 +48,54 @@ void export_KData(py::module& m) {
 
         :rtype: DatetimeList)")
 
-      .def("get", KData_getKRecord1, R"(get(self, pos)
+      .def("get", KData_getKRecord1, py::return_value_policy::copy, R"(get(self, pos)
 
         获取指定索引位置的K线记录
 
         :param int pos: 位置索引
         :rtype: KRecord)")
 
-      .def("get_by_datetime", KData_getKRecord2, R"(get_by_datetime(self, datetime)
+      .def("get_by_datetime", KData_getKRecord2, py::return_value_policy::copy,
+           R"(get_by_datetime(self, datetime)
 
         获取指定时间的K线记录。
 
         :param Datetime datetime: 指定的日期
         :rtype: KRecord)")
 
-      .def("_getPos", &KData::getPos)  // python中需要将Null的情况改写为None
+      .def(
+        "get_pos",
+        [](const KData& self, const Datetime& d) {
+            size_t pos = self.getPos(d);
+            py::object ret = py::none();
+            if (pos != Null<size_t>()) {
+                ret = py::int_(pos);
+            }
+            return ret;
+        },
+        R"(get_pos(self, datetime)
 
-      .def("_getPosInStock", &KData::getPosInStock)
+        获取指定时间的K线记录的索引位置, 如果不在数据范围内，则返回 None
+        
+        :param Datetime datetime: 指定的日期
+        :rtype: int)")
+
+      .def(
+        "get_pos_in_stock",
+        [](const KData& self, Datetime datetime) {
+            size_t pos = self.getPosInStock(datetime);
+            py::object ret = py::none();
+            if (pos != Null<size_t>()) {
+                ret = py::int_(pos);
+            }
+            return ret;
+        },
+        R"(get_pos_in_stock(self, datetime) 
+        
+        获取指定时间对应的原始K线中的索引位置
+
+        :param Datetime datetime: 指定的时间
+        :return: 对应的索引位置，如果不在数据范围内，则返回 None)")
 
       .def("empty", &KData::empty, R"(empty(self)
 
@@ -72,17 +103,25 @@ void export_KData(py::module& m) {
 
         :rtype: bool)")
 
-      .def("get_query", &KData::getQuery, R"(get_query(self)
+      .def("get_query", &KData::getQuery, py::return_value_policy::copy, R"(get_query(self)
 
         获取关联的查询条件
 
         :rtype: KQuery)")
 
-      .def("get_stock", &KData::getStock, R"(get_stock(self)
+      .def("get_stock", &KData::getStock, py::return_value_policy::copy, R"(get_stock(self)
 
         获取关联的Stock
 
         :rtype: Stock)")
+
+      .def("get_kdata", &KData::getKData, R"(get_kdata(self, start_date, end_date)
+      
+        通过当前 KData 获取一个保持数据类型、复权类型不变的新的 KData（注意，不是原 KData 的子集）
+
+        :param Datetime start: 新的起始日期
+        :param Datetime end: 新的结束日期
+        :rtype: KData)")
 
       .def("tocsv", &KData::tocsv, R"(tocsv(self, filename)
 

@@ -25,12 +25,20 @@ IAdvance::IAdvance() : IndicatorImp("ADVANCE", 1) {
     setParam<string>("market", "SH");
     setParam<int>("stk_type", STOCKTYPE_A);
     setParam<bool>("ignore_context", false);
+    setParam<bool>("fill_null", true);
 }
 
 IAdvance::~IAdvance() {}
 
-bool IAdvance::check() {
-    return true;
+void IAdvance::_checkParam(const string& name) const {
+    if ("market" == name) {
+        string market = getParam<string>(name);
+        auto market_info = StockManager::instance().getMarketInfo(market);
+        HKU_CHECK(market_info != Null<MarketInfo>(), "Invalid market: {}", market);
+    } else if ("stk_type" == name) {
+        int stk_type = getParam<int>("stk_type");
+        HKU_ASSERT(stk_type >= 0);
+    }
 }
 
 void IAdvance::_calculate(const Indicator& ind) {
@@ -62,33 +70,36 @@ void IAdvance::_calculate(const Indicator& ind) {
 
     m_discard = 1;
     _readyBuffer(total, 1);
-    Indicator x = ALIGN(CLOSE() > REF(CLOSE(), 1), dates);
+
+    auto* dst = this->data();
+    Indicator x = ALIGN(CLOSE() > REF(CLOSE(), 1), dates, getParam<bool>("fill_null"));
     for (auto iter = sm.begin(); iter != sm.end(); ++iter) {
         if ((stk_type <= STOCKTYPE_TMP && iter->type() != stk_type) ||
             (market != "" && iter->market() != market)) {
             continue;
         }
         x.setContext(*iter, q);
+        auto const* xdata = x.data();
         for (size_t i = x.discard(); i < total; i++) {
             if (x.getDatetime(i) > iter->lastDatetime()) {
                 break;
             }
 
-            if (x[i]) {
-                price_t val = get(i);
-                _set(std::isnan(val) ? 1 : val + 1, i);
+            if (xdata[i]) {
+                dst[i] = std::isnan(dst[i]) ? 1 : dst[i] + 1;
             }
         }
     }
 }
 
 Indicator HKU_API ADVANCE(const KQuery& query, const string& market, int stk_type,
-                          bool ignore_context) {
+                          bool ignore_context, bool fill_null) {
     IndicatorImpPtr p = make_shared<IAdvance>();
     p->setParam<KQuery>("query", query);
     p->setParam<string>("market", market);
     p->setParam<int>("stk_type", stk_type);
     p->setParam<bool>("ignore_context", ignore_context);
+    p->setParam<bool>("fill_null", fill_null);
     p->calculate();
     return Indicator(p);
 }

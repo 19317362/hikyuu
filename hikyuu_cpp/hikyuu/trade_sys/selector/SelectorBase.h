@@ -10,53 +10,30 @@
 #define TRADE_SYS_SELECTOR_SELECTORBASE_H_
 
 #include "../system/System.h"
-#include "../allocatefunds/AllocateFundsBase.h"
 #include "../../KData.h"
 #include "../../utilities/Parameter.h"
-
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-
-#if HKU_SUPPORT_XML_ARCHIVE
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#endif /* HKU_SUPPORT_XML_ARCHIVE */
-
-#if HKU_SUPPORT_TEXT_ARCHIVE
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#endif /* HKU_SUPPORT_TEXT_ARCHIVE */
-
-#if HKU_SUPPORT_BINARY_ARCHIVE
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#endif /* HKU_SUPPORT_BINARY_ARCHIVE */
-
-#include <boost/serialization/export.hpp>
-#endif /* HKU_SUPPORT_SERIALIZATION */
+#include "hikyuu/trade_sys/allocatefunds/AllocateFundsBase.h"
+#include "SystemWeight.h"
 
 namespace hku {
-
-class HKU_API Portfolio;
 
 /**
  * 交易对象选择模块
  * @ingroup Selector
  */
 class HKU_API SelectorBase : public enable_shared_from_this<SelectorBase> {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     /** 默认构造函数 */
     SelectorBase();
+    SelectorBase(const SelectorBase&) = default;
 
     /**
      * 构造函数，同时指定算法名称
      * @param name 指定名称
      */
-    SelectorBase(const string& name);
+    explicit SelectorBase(const string& name);
 
     /** 析构函数 */
     virtual ~SelectorBase();
@@ -73,7 +50,7 @@ public:
      * @param protoSys 交易系统策略原型
      * @return 如果 protoSys 无效 或 stock 无效，则返回 false， 否则返回 true
      */
-    bool addStock(const Stock& stock, const SystemPtr& protoSys);
+    void addStock(const Stock& stock, const SystemPtr& protoSys);
 
     /**
      * 加入一组相同交易策略的股票
@@ -82,7 +59,21 @@ public:
      * @param protoSys 交易系统策略原型
      * @return 如果 protoSys 无效则返回false，否则返回 true
      */
-    bool addStockList(const StockList& stkList, const SystemPtr& protoSys);
+    void addStockList(const StockList& stkList, const SystemPtr& protoSys);
+
+    /**
+     * 直接加入已有系统策略示例
+     * @note 应该已经绑定 stock
+     * @param sys
+     */
+    void addSystem(const SYSPtr& sys);
+
+    /**
+     * 直接加入已有系统策略示例
+     * @note 应该已经绑定 stock
+     * @param sys
+     */
+    void addSystemList(const SystemList& sys);
 
     /**
      * @brief 获取原型系统列表
@@ -119,22 +110,37 @@ public:
     /** 子类计算接口 */
     virtual void _calculate() = 0;
 
-    /** 子类获取指定时刻开盘时选中的标的 */
-    virtual SystemList getSelectedOnOpen(Datetime date) = 0;
-
     /** 子类获取指定时刻收盘时选中的标的 */
-    virtual SystemList getSelectedOnClose(Datetime date) = 0;
+    virtual SystemWeightList getSelected(Datetime date) = 0;
 
     virtual bool isMatchAF(const AFPtr& af) = 0;
 
-private:
-    friend class HKU_API Portfolio;
+    /** 用于逻辑运算的子类中添加原型系统，一般不需要子类实现 */
+    virtual void _addSystem(const SYSPtr& sys) {}
+
+    /** 用于逻辑运算的子类中添加原型系统，一般不需要子类实现 */
+    virtual void _removeAll() {}
 
     /* 仅供PF调用，由PF通知其实际运行的系统列表，并启动计算 */
-    void calculate(const SystemList& sysList, const KQuery& query);
+    virtual void calculate(const SystemList& pf_realSysList, const KQuery& query);
+
+    /* 仅供PF调用，建立实际系统到原型系统映射 */
+    virtual void bindRealToProto(const SYSPtr& real, const SYSPtr& proto) {}
+
+    void calculate_proto(const KQuery& query);
+
+    virtual string str() const;
+
+private:
+    void initParam();
 
 protected:
     string m_name;
+    bool m_calculated{false};  // 是否已计算过
+    bool m_proto_calculated{false};
+    KQuery m_query;
+    KQuery m_proto_query;
+
     SystemList m_pro_sys_list;  // 原型系统列表
     SystemList m_real_sys_list;  // PF组合中实际运行的系统，有PF执行时设定，顺序与原型列表一一对应
 
@@ -191,14 +197,13 @@ private:                                                       \
 #define SELECTOR_NO_PRIVATE_MEMBER_SERIALIZATION
 #endif
 
-#define SELECTOR_IMP(classname)                                    \
-public:                                                            \
-    virtual SelectorPtr _clone() override {                        \
-        return SelectorPtr(new classname());                       \
-    }                                                              \
-    virtual SystemList getSelectedOnOpen(Datetime date) override;  \
-    virtual SystemList getSelectedOnClose(Datetime date) override; \
-    virtual bool isMatchAF(const AFPtr& af) override;              \
+#define SELECTOR_IMP(classname)                                   \
+public:                                                           \
+    virtual SelectorPtr _clone() override {                       \
+        return std::make_shared<classname>();                     \
+    }                                                             \
+    virtual SystemWeightList getSelected(Datetime date) override; \
+    virtual bool isMatchAF(const AFPtr& af) override;             \
     virtual void _calculate() override;
 
 /**

@@ -59,7 +59,7 @@ public:
         PYBIND11_OVERLOAD(bool, TradeManagerBase, have, stock);
     }
 
-    bool haveShort(const Stock& stock) const {
+    bool haveShort(const Stock& stock) const override {
         PYBIND11_OVERRIDE_NAME(bool, TradeManagerBase, "have_short", haveShort, stock);
     }
 
@@ -212,18 +212,12 @@ public:
                                ktype);
     }
 
-    PriceList getFundsCurve(const DatetimeList& dates, KQuery::KType ktype) override {
-        PYBIND11_OVERRIDE_NAME(PriceList, TradeManagerBase, "get_funds_curve", getFundsCurve, dates,
-                               ktype);
-    }
-
-    PriceList getProfitCurve(const DatetimeList& dates, KQuery::KType ktype) override {
-        PYBIND11_OVERRIDE_NAME(PriceList, TradeManagerBase, "get_profit_curve", getProfitCurve,
-                               dates, ktype);
-    }
-
     bool addTradeRecord(const TradeRecord& tr) override {
         PYBIND11_OVERRIDE_NAME(bool, TradeManagerBase, "add_trade_record", addTradeRecord, tr);
+    }
+
+    bool addPosition(const PositionRecord& pr) override {
+        PYBIND11_OVERRIDE_NAME(bool, TradeManagerBase, "add_position", addPosition, pr);
     }
 
     string str() const override {
@@ -232,6 +226,11 @@ public:
 
     void tocsv(const string& path) override {
         PYBIND11_OVERLOAD(void, TradeManagerBase, tocsv, path);
+    }
+
+    void fetchAssetInfoFromBroker(const OrderBrokerPtr& broker) override {
+        PYBIND11_OVERRIDE_NAME(void, TradeManagerBase, "fetch_asset_info_from_broker",
+                               fetchAssetInfoFromBroker, broker);
     }
 };
 
@@ -255,7 +254,6 @@ void export_TradeManager(py::module& m) {
 
 公共参数：
 
-    - reinvest=False (bool) : 红利是否再投资
     - precision=2 (int) : 价格计算精度
     - support_borrow_cash=False (bool) : 是否自动融资
     - support_borrow_stock=False (bool) : 是否自动融券
@@ -416,7 +414,7 @@ void export_TradeManager(py::module& m) {
     :param ktype: K线类型
     :rtype: float)")
 
-      .def("get_funds", getFunds_1, py::arg("ktype"))
+      .def("get_funds", getFunds_1, py::arg("ktype") = KQuery::DAY)
       .def("get_funds", getFunds_2, py::arg("datetime"), py::arg("ktype") = KQuery::DAY,
            R"(get_funds(self, [datetime, ktype = Query.DAY])
 
@@ -425,6 +423,14 @@ void export_TradeManager(py::module& m) {
     :param Datetime datetime:  指定时刻
     :param Query.KType ktype: K线类型
     :rtype: FundsRecord)")
+
+      .def("get_funds_list", &TradeManagerBase::getFundsList, py::arg("dates"),
+           py::arg("ktype") = KQuery::DAY, R"(get_funds_list(self, dates[, ktype = Query.DAY])
+    
+    获取指定日期列表的每日资产记录
+    :param Datetime datetime:  指定时刻
+    :param Query.KType ktype: K线类型
+    :rtype: FundsList)")
 
       .def("get_funds_curve", &TradeManagerBase::getFundsCurve, py::arg("dates"),
            py::arg("ktype") = KQuery::DAY,
@@ -446,6 +452,26 @@ void export_TradeManager(py::module& m) {
     :param DatetimeList dates: 日期列表，根据该日期列表获取其对应的收益曲线，应为递增顺序
     :param Query.KType ktype: K线类型，必须与日期列表匹配
     :return: 收益曲线
+    :rtype: PriceList)")
+
+      .def("get_profit_cum_change_curve", &TradeManagerBase::getProfitCumChangeCurve,
+           py::arg("dates"), py::arg("ktype") = KQuery::DAY,
+           R"(get_profit_cum_change_curve(self, dates[, ktype = Query.DAY])
+
+    获取累积收益率曲线
+
+    :param DatetimeList dates: 日期列表
+    :param Query.KType ktype: K线类型，必须与日期列表匹配
+    :rtype: PriceList)")
+
+      .def("get_base_assets_curve", &TradeManagerBase::getBaseAssetsCurve, py::arg("dates"),
+           py::arg("ktype") = KQuery::DAY,
+           R"(get_profit_curve(self, dates[, ktype = Query.DAY])
+
+    获取投入本值资产曲线（投入本钱）
+
+    :param DatetimeList dates: 日期列表
+    :param Query.KType ktype: K线类型，必须与日期列表匹配
     :rtype: PriceList)")
 
       .def("checkin", &TradeManagerBase::checkin, R"(checkin(self, datetime, cash)
@@ -518,6 +544,13 @@ void export_TradeManager(py::module& m) {
     :return: True（成功） | False（失败）
     :rtype: bool)")
 
+      .def("add_position", &TradeManagerBase::addPosition, R"(add_postion(self, position)
+
+    建立初始账户后，直接加入持仓记录，仅用于构建初始有持仓的账户
+
+    :param PositionRecord position: 持仓记录
+    return True | False)")
+
       .def("tocsv", &TradeManagerBase::tocsv, R"(tocsv(self, path)
 
     以csv格式输出交易记录、未平仓记录、已平仓记录、资产净值曲线
@@ -530,6 +563,8 @@ void export_TradeManager(py::module& m) {
       根据权息信息更新当前持仓及交易记录，必须按时间顺序被调用
 
       :param Datetime date: 当前时刻)")
+
+      .def("fetch_asset_info_from_broker", &TradeManagerBase::fetchAssetInfoFromBroker)
 
         DEF_PICKLE(TradeManagerPtr);
 }

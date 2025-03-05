@@ -13,29 +13,6 @@
 #include "../utilities/Parameter.h"
 #include "CostRecord.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-
-#if HKU_SUPPORT_XML_ARCHIVE
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#endif /* HKU_SUPPORT_XML_ARCHIVE */
-
-#if HKU_SUPPORT_TEXT_ARCHIVE
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#endif /* HKU_SUPPORT_TEXT_ARCHIVE */
-
-#if HKU_SUPPORT_BINARY_ARCHIVE
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#endif /* HKU_SUPPORT_BINARY_ARCHIVE */
-
-#include <boost/serialization/export.hpp>
-#endif /* HKU_SUPPORT_SERIALIZATION */
-
 namespace hku {
 
 /**
@@ -43,7 +20,7 @@ namespace hku {
  * @ingroup TradeCost
  */
 class HKU_API TradeCostBase {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     TradeCostBase(const string& name);

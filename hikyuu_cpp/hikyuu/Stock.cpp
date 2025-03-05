@@ -8,7 +8,6 @@
 #include "GlobalInitializer.h"
 #include "StockManager.h"
 #include "data_driver/KDataDriver.h"
-#include "data_driver/HistoryFinanceReader.h"
 #include "KData.h"
 
 namespace hku {
@@ -64,7 +63,7 @@ Stock::Data::Data()
   m_minTradeNumber(default_minTradeNumber),
   m_maxTradeNumber(default_maxTradeNumber) {
     const auto& ktype_list = KQuery::getAllKType();
-    for (auto& ktype : ktype_list) {
+    for (const auto& ktype : ktype_list) {
         pKData[ktype] = nullptr;
         pMutex[ktype] = nullptr;
     }
@@ -93,13 +92,19 @@ Stock::Data::Data(const string& market, const string& code, const string& name, 
     }
 
     to_upper(m_market);
-    m_market_code = m_market + m_code;
+    m_market_code = marketCode();
 
     const auto& ktype_list = KQuery::getAllKType();
-    for (auto& ktype : ktype_list) {
+    for (const auto& ktype : ktype_list) {
         pMutex[ktype] = new std::shared_mutex();
         pKData[ktype] = nullptr;
     }
+}
+
+string Stock::Data::marketCode() const {
+    if (m_type == STOCKTYPE_CRYPTO)
+        return m_market + "/" + m_code;
+    return m_market + m_code;
 }
 
 Stock::Data::~Data() {
@@ -139,17 +144,16 @@ Stock& Stock::operator=(Stock&& x) {
 }
 
 Stock::Stock(const string& market, const string& code, const string& name) {
-    m_data =
-      shared_ptr<Data>(new Data(market, code, name, default_type, default_valid, default_startDate,
-                                default_lastDate, default_tick, default_tickValue,
-                                default_precision, default_minTradeNumber, default_maxTradeNumber));
+    m_data = make_shared<Data>(market, code, name, default_type, default_valid, default_startDate,
+                               default_lastDate, default_tick, default_tickValue, default_precision,
+                               default_minTradeNumber, default_maxTradeNumber);
 }
 
 Stock::Stock(const string& market, const string& code, const string& name, uint32_t type,
              bool valid, const Datetime& startDate, const Datetime& lastDate) {
-    m_data = shared_ptr<Data>(new Data(market, code, name, type, valid, startDate, lastDate,
-                                       default_tick, default_tickValue, default_precision,
-                                       default_minTradeNumber, default_maxTradeNumber));
+    m_data = make_shared<Data>(market, code, name, type, valid, startDate, lastDate, default_tick,
+                               default_tickValue, default_precision, default_minTradeNumber,
+                               default_maxTradeNumber);
 }
 
 Stock::Stock(const string& market, const string& code, const string& name, uint32_t type,
@@ -188,11 +192,11 @@ bool Stock::valid() const {
     return m_data ? m_data->m_valid : default_valid;
 }
 
-Datetime Stock::startDatetime() const {
+const Datetime& Stock::startDatetime() const {
     return m_data ? m_data->m_startDate : default_startDate;
 }
 
-Datetime Stock::lastDatetime() const {
+const Datetime& Stock::lastDatetime() const {
     return m_data ? m_data->m_lastDate : default_lastDate;
 }
 
@@ -224,6 +228,152 @@ double Stock::maxTradeNumber() const {
     return m_data ? m_data->m_maxTradeNumber : default_maxTradeNumber;
 }
 
+void Stock::market(const string& market_) {
+    string n_market(market_);
+    to_upper(n_market);
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(n_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_market = n_market;
+        m_data->m_market_code = m_data->marketCode();
+    }
+}
+
+void Stock::code(const string& code_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, code_, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_code = code_;
+        m_data->m_market_code = m_data->marketCode();
+    }
+}
+
+void Stock::name(const string& name_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, name_, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_name = name_;
+    }
+}
+
+void Stock::type(uint32_t type_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, type_, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_type = type_;
+    }
+}
+
+void Stock::valid(bool valid_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, valid_,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_valid = valid_;
+    }
+}
+
+void Stock::precision(int precision_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            precision_, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_precision = precision_;
+    }
+}
+
+void Stock::startDatetime(const Datetime& date) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            date, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_startDate = date;
+    }
+}
+
+void Stock::lastDatetime(const Datetime& date) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, date, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    } else {
+        m_data->m_lastDate = date;
+    }
+}
+
+void Stock::tick(price_t tick_) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    }
+    m_data->m_tick = tick_;
+    if (0.0 == m_data->m_tick) {
+        HKU_WARN("tick should not be zero! now use as 1.0");
+        m_data->m_unit = 1.0;
+    } else {
+        m_data->m_unit = m_data->m_tickValue / m_data->m_tick;
+    }
+}
+
+void Stock::tickValue(price_t val) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, default_maxTradeNumber);
+    }
+    m_data->m_tickValue = val;
+    if (0.0 == m_data->m_tick) {
+        HKU_WARN("tick should not be zero! now use as 1.0");
+        m_data->m_unit = 1.0;
+    } else {
+        m_data->m_unit = m_data->m_tickValue / m_data->m_tick;
+    }
+}
+
+void Stock::minTradeNumber(double num) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, num, default_maxTradeNumber);
+    } else {
+        m_data->m_minTradeNumber = num;
+    }
+}
+
+void Stock::maxTradeNumber(double num) {
+    if (!m_data) {
+        m_data =
+          make_shared<Data>(default_market, default_code, default_name, default_type, default_valid,
+                            default_startDate, default_lastDate, default_tick, default_tickValue,
+                            default_precision, default_minTradeNumber, num);
+    } else {
+        m_data->m_maxTradeNumber = num;
+    }
+}
+
 void Stock::setKDataDriver(const KDataDriverConnectPoolPtr& kdataDriver) {
     HKU_CHECK(kdataDriver, "kdataDriver is nullptr!");
     m_kdataDriver = kdataDriver;
@@ -252,6 +402,7 @@ bool Stock::isBuffer(KQuery::KType ktype) const {
     HKU_IF_RETURN(!m_data, false);
     string nktype(ktype);
     to_upper(nktype);
+    std::shared_lock<std::shared_mutex> lock(*(m_data->pMutex[ktype]));
     return m_data->pKData.find(nktype) != m_data->pKData.end() && m_data->pKData[nktype];
 }
 
@@ -284,16 +435,21 @@ void Stock::loadKDataToBuffer(KQuery::KType inkType) {
 
     releaseKDataBuffer(kType);
 
-    const auto& param = StockManager::instance().getPreloadParameter();
-    string preload_type = fmt::format("{}_max", kType);
-    to_lower(preload_type);
-    int max_num = param.tryGet<int>(preload_type, 4096);
-    HKU_ERROR_IF_RETURN(max_num < 0, void(), "Invalid preload {} param: {}", preload_type, max_num);
-
+    int start = 0;
     auto driver = m_kdataDriver->getConnect();
     size_t total = driver->getCount(m_data->m_market, m_data->m_code, kType);
-    HKU_IF_RETURN(total == 0, void());
-    int start = total <= max_num ? 0 : total - max_num;
+
+    // CSV 直接全部加载至内存，其他类型依据配置的预加载参数进行加载
+    if (driver->name() != "TMPCSV") {
+        const auto& param = StockManager::instance().getPreloadParameter();
+        string preload_type = fmt::format("{}_max", kType);
+        to_lower(preload_type);
+        int max_num = param.tryGet<int>(preload_type, 4096);
+        HKU_ERROR_IF_RETURN(max_num < 0, void(), "Invalid preload {} param: {}", preload_type,
+                            max_num);
+        start = total <= max_num ? 0 : total - max_num;
+    }
+
     {
         std::unique_lock<std::shared_mutex> lock(*(m_data->pMutex[kType]));
         // 需要对是否已缓存进行二次判定，防止加锁之前已被缓存
@@ -302,8 +458,10 @@ void Stock::loadKDataToBuffer(KQuery::KType inkType) {
         }
         KRecordList* ptr_klist = new KRecordList;
         m_data->pKData[kType] = ptr_klist;
-        (*ptr_klist) = driver->getKRecordList(m_data->m_market, m_data->m_code,
-                                              KQuery(start, Null<int64_t>(), kType));
+        if (total != 0) {
+            (*ptr_klist) = driver->getKRecordList(m_data->m_market, m_data->m_code,
+                                                  KQuery(start, Null<int64_t>(), kType));
+        }
     }
 }
 
@@ -340,11 +498,22 @@ size_t Stock::getCount(KQuery::KType kType) const {
     HKU_IF_RETURN(!m_data, 0);
     string nktype(kType);
     to_upper(nktype);
-    if (m_data->pKData.find(nktype) != m_data->pKData.end() && m_data->pKData[nktype]) {
+    if (isBuffer(nktype)) {
         return _getCountFromBuffer(nktype);
     }
 
-    return m_kdataDriver ? m_kdataDriver->getConnect()->getCount(market(), code(), nktype) : 0;
+    size_t ret =
+      m_kdataDriver ? m_kdataDriver->getConnect()->getCount(market(), code(), nktype) : 0;
+
+    // 异步加载时如果数据库数据量大于预加载数量强制返回预加载最大数量
+    const auto& preload_params = StockManager::instance().getPreloadParameter();
+    if (preload_params.tryGet<bool>(nktype, false)) {
+        int num = preload_params.tryGet<int>(fmt::format("{}_max", nktype), 4096);
+        if (ret > num) {
+            ret = num;
+        }
+    }
+    return ret;
 }
 
 price_t Stock::getMarketValue(const Datetime& datetime, KQuery::KType inktype) const {
@@ -543,12 +712,13 @@ bool Stock::_getIndexRangeByDateFromBuffer(const KQuery& query, size_t& out_star
     return true;
 }
 
-KRecord Stock::_getKRecordFromBuffer(size_t pos, KQuery::KType ktype) const {
+KRecord Stock::_getKRecordFromBuffer(size_t pos, const KQuery::KType& ktype) const {
     std::shared_lock<std::shared_mutex> lock(*(m_data->pMutex[ktype]));
-    return m_data->pKData[ktype]->at(pos);
+    const auto& buf = *(m_data->pKData[ktype]);
+    return pos >= buf.size() ? KRecord() : buf[pos];
 }
 
-KRecord Stock::getKRecord(size_t pos, KQuery::KType kType) const {
+KRecord Stock::getKRecord(size_t pos, const KQuery::KType& kType) const {
     HKU_IF_RETURN(!m_data, Null<KRecord>());
     if (isBuffer(kType)) {
         return _getKRecordFromBuffer(pos, kType);
@@ -560,7 +730,7 @@ KRecord Stock::getKRecord(size_t pos, KQuery::KType kType) const {
     return klist.size() > 0 ? klist[0] : Null<KRecord>();
 }
 
-KRecord Stock::getKRecord(const Datetime& datetime, KQuery::KType ktype) const {
+KRecord Stock::getKRecord(const Datetime& datetime, const KQuery::KType& ktype) const {
     KRecord result;
     HKU_IF_RETURN(isNull(), result);
 
@@ -662,7 +832,8 @@ TransList Stock::getTransList(const KQuery& query) const {
 
 Parameter Stock::getFinanceInfo() const {
     Parameter result;
-    HKU_IF_RETURN(type() != STOCKTYPE_A && type() != STOCKTYPE_GEM && type() != STOCKTYPE_START,
+    HKU_IF_RETURN(type() != STOCKTYPE_A && type() != STOCKTYPE_GEM && type() != STOCKTYPE_START &&
+                    type() != STOCKTYPE_A_BJ,
                   result);
 
     BaseInfoDriverPtr driver = StockManager::instance().getBaseInfoDriver();
@@ -673,14 +844,8 @@ Parameter Stock::getFinanceInfo() const {
     return result;
 }
 
-PriceList Stock::getHistoryFinanceInfo(const Datetime& date) const {
-    PriceList result;
-    HKU_IF_RETURN(type() != STOCKTYPE_A && type() != STOCKTYPE_GEM && type() != STOCKTYPE_START,
-                  result);
-    const StockManager& sm = StockManager::instance();
-    HistoryFinanceReader rd(sm.datadir() + "/downloads/finance");
-    result = rd.getHistoryFinanceInfo(date, market(), code());
-    return result;
+vector<Block> Stock::getBelongToBlockList(const string& category) const {
+    return StockManager::instance().getStockBelongs(*this, category);
 }
 
 // 判断是否在交易时间段内（不判断日期）
@@ -700,11 +865,12 @@ bool Stock::isTransactionTime(Datetime time) {
     Datetime today = Datetime::today();
     Datetime openTime1 = today + market_info.openTime1();
     Datetime closeTime1 = today + market_info.closeTime1();
-    HKU_IF_RETURN(time >= openTime1 && time < closeTime1, true);  // close判断不包括等于
+    // 某些行情闭市最后一天tick时间可能延迟数秒，补充余量
+    HKU_IF_RETURN(time >= openTime1 && time <= closeTime1 + Seconds(30), true);
 
     Datetime openTime2 = today + market_info.openTime2();
     Datetime closeTime2 = today + market_info.closeTime2();
-    return time >= openTime2 && time < closeTime2;
+    return time >= openTime2 && time <= closeTime2 + Seconds(30);
 }
 
 void Stock::realtimeUpdate(KRecord record, KQuery::KType inktype) {
@@ -732,12 +898,94 @@ void Stock::realtimeUpdate(KRecord record, KQuery::KType inktype) {
 
     // 如果传入的记录日期等于最后一条记录日期，则更新最后一条记录；否则，追加入缓存
     if (tmp.datetime == record.datetime) {
-        tmp = record;
+        if (tmp.highPrice < record.highPrice) {
+            tmp.highPrice = record.highPrice;
+        }
+        if (tmp.lowPrice > record.lowPrice) {
+            tmp.lowPrice = record.lowPrice;
+        }
+        tmp.closePrice = record.closePrice;
+        tmp.transAmount = record.transAmount;
+        tmp.transCount = record.transCount;
+
     } else if (tmp.datetime < record.datetime) {
         m_data->pKData[ktype]->push_back(record);
     } else {
-        HKU_INFO("Ignore record, datetime < last record.datetime!");
+        HKU_DEBUG("Ignore record, datetime({}) < last record.datetime({})! {} {}", record.datetime,
+                  tmp.datetime, market_code(), inktype);
     }
+}
+
+void Stock::setKRecordList(const KRecordList& ks, const KQuery::KType& ktype) {
+    HKU_CHECK(
+      isNull(),
+      "The stock is Null, can't set kdata! Please create a stock using the format Stock(market, "
+      "code, name)! Calling Stock() will create a special null instance.");
+
+    HKU_IF_RETURN(ks.empty(), void());
+    string nktype(ktype);
+    to_upper(nktype);
+
+    // 写锁
+    std::unique_lock<std::shared_mutex> lock(*(m_data->pMutex[ktype]));
+    HKU_CHECK(m_data->pKData.find(nktype) != m_data->pKData.end(), "Invalid ktype: {}", ktype);
+
+    if (!m_data->pKData[nktype]) {
+        m_data->pKData[nktype] = new KRecordList();
+    }
+
+    (*(m_data->pKData[nktype])) = ks;
+
+    Parameter param;
+    param.set<string>("type", "DoNothing");
+    m_kdataDriver = DataDriverFactory::getKDataDriverPool(param);
+
+    m_data->m_valid = true;
+    m_data->m_startDate = ks.front().datetime;
+    m_data->m_lastDate = ks.back().datetime;
+}
+
+void Stock::setKRecordList(KRecordList&& ks, const KQuery::KType& ktype) {
+    HKU_CHECK(
+      isNull(),
+      "The stock is Null, can't set kdata! Please create a stock using the format Stock(market, "
+      "code, name)! Calling Stock() will create a special null instance.");
+
+    HKU_IF_RETURN(ks.empty(), void());
+    string nktype(ktype);
+    to_upper(nktype);
+
+    // 写锁
+    std::unique_lock<std::shared_mutex> lock(*(m_data->pMutex[ktype]));
+    HKU_CHECK(m_data->pKData.find(nktype) != m_data->pKData.end(), "Invalid ktype: {}", ktype);
+
+    if (!m_data->pKData[nktype]) {
+        m_data->pKData[nktype] = new KRecordList();
+    }
+
+    (*m_data->pKData[nktype]) = std::move(ks);
+
+    Parameter param;
+    param.set<string>("type", "DoNothing");
+    m_kdataDriver = DataDriverFactory::getKDataDriverPool(param);
+
+    m_data->m_valid = true;
+    m_data->m_startDate = (*m_data->pKData[nktype]).front().datetime;
+    m_data->m_lastDate = (*m_data->pKData[nktype]).back().datetime;
+}
+
+const vector<HistoryFinanceInfo>& Stock::getHistoryFinance() const {
+    std::lock_guard<std::mutex> lock(m_data->m_history_finance_mutex);
+    if (!m_data->m_history_finance_ready) {
+        m_data->m_history_finance =
+          StockManager::instance().getHistoryFinance(*this, Datetime::min(), Null<Datetime>());
+        m_data->m_history_finance_ready = true;
+    }
+    return m_data->m_history_finance;
+}
+
+DatetimeList Stock::getTradingCalendar(const KQuery& query) const {
+    return StockManager::instance().getTradingCalendar(query, market());
 }
 
 Stock HKU_API getStock(const string& querystr) {

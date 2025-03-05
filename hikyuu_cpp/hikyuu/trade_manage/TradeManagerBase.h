@@ -17,11 +17,6 @@
 #include "OrderBrokerBase.h"
 #include "crt/TC_Zero.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/nvp.hpp>
-#include <boost/serialization/split_free.hpp>
-#endif
-
 namespace hku {
 
 /**
@@ -34,7 +29,7 @@ namespace hku {
  * @ingroup TradeManagerClass
  */
 class HKU_API TradeManagerBase {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     TradeManagerBase() : TradeManagerBase("", TC_Zero()) {}
@@ -173,6 +168,7 @@ public:
         p->m_name = m_name;
         p->m_broker_last_datetime = m_broker_last_datetime;
         p->m_costfunc = m_costfunc;
+        p->m_broker_list = m_broker_list;
         return p;
     }
 
@@ -194,6 +190,86 @@ public:
      */
     void clearBroker() {
         m_broker_list.clear();
+    }
+
+    /**
+     * 获取指定日期列表中的所有日资产记录
+     * @param dates 日期列表
+     * @param ktype K线类型，必须与日期列表匹配，默认KQuery::DAY
+     * @return 日资产记录列表
+     */
+    FundsList getFundsList(const DatetimeList& dates, const KQuery::KType& ktype = KQuery::DAY) {
+        size_t total = dates.size();
+        FundsList result(total);
+        HKU_IF_RETURN(total == 0, result);
+        for (size_t i = 0; i < total; ++i) {
+            result[i] = getFunds(dates[i], ktype);
+        }
+        return result;
+    }
+
+    /**
+     * 获取资产净值曲线，含借入的资产
+     * @param dates 日期列表，根据该日期列表获取其对应的资产净值曲线
+     * @param ktype K线类型，必须与日期列表匹配，默认KQuery::DAY
+     * @return 资产净值列表
+     */
+    PriceList getFundsCurve(const DatetimeList& dates, const KQuery::KType& ktype = KQuery::DAY) {
+        FundsList funds_list = getFundsList(dates, ktype);
+        PriceList ret(funds_list.size());
+        int precision = getParam<int>("precision");
+        for (size_t i = 0, total = funds_list.size(); i < total; i++) {
+            ret[i] = roundEx(funds_list[i].total_assets(), precision);
+        }
+        return ret;
+    }
+
+    /**
+     * 获取收益曲线，即扣除历次存入资金后的资产净值曲线
+     * @param dates 日期列表，根据该日期列表获取其对应的收益曲线，应为递增顺序
+     * @param ktype K线类型，必须与日期列表匹配，默认为KQuery::DAY
+     * @return 收益曲线
+     */
+    PriceList getProfitCurve(const DatetimeList& dates, const KQuery::KType& ktype = KQuery::DAY) {
+        FundsList funds_list = getFundsList(dates, ktype);
+        PriceList ret(funds_list.size());
+        int precision = getParam<int>("precision");
+        for (size_t i = 0, total = funds_list.size(); i < total; i++) {
+            ret[i] = roundEx(funds_list[i].profit(), precision);
+        }
+        return ret;
+    }
+
+    /**
+     * 获取累积收益率曲线
+     * @param dates 日期列表
+     * @param ktype K线类型，必须与日期列表匹配，默认为KQuery::DAY
+     * @return 收益率曲线
+     */
+    PriceList getProfitCumChangeCurve(const DatetimeList& dates,
+                                      const KQuery::KType& ktype = KQuery::DAY) {
+        FundsList funds_list = getFundsList(dates, ktype);
+        PriceList ret(funds_list.size());
+        for (size_t i = 0, total = funds_list.size(); i < total; i++) {
+            ret[i] = funds_list[i].total_assets() / funds_list[i].total_base();
+        }
+        return ret;
+    }
+
+    /**
+     * 获取投入本值资产曲线
+     * @param dates 日期列表，根据该日期列表获取其对应的收益曲线，应为递增顺序
+     * @param ktype K线类型，必须与日期列表匹配，默认为KQuery::DAY
+     * @return 价格曲线
+     */
+    PriceList getBaseAssetsCurve(const DatetimeList& dates,
+                                 const KQuery::KType& ktype = KQuery::DAY) {
+        FundsList funds_list = getFundsList(dates, ktype);
+        PriceList ret(funds_list.size());
+        for (size_t i = 0, total = funds_list.size(); i < total; i++) {
+            ret[i] = funds_list[i].total_base();
+        }
+        return ret;
     }
 
     /**
@@ -368,10 +444,9 @@ public:
 
     /**
      * 获取指定证券的空头持仓记录
-     * @param date 指定日期
      * @param stock 指定的证券
      */
-    virtual PositionRecord getShortPosition(const Stock&) const {
+    virtual PositionRecord getShortPosition(const Stock& stock) const {
         HKU_WARN("The subclass does not implement this method");
         return PositionRecord();
     }
@@ -584,34 +659,23 @@ public:
     }
 
     /**
-     * 获取资产净值曲线，含借入的资产
-     * @param dates 日期列表，根据该日期列表获取其对应的资产净值曲线
-     * @param ktype K线类型，必须与日期列表匹配，默认KQuery::DAY
-     * @return 资产净值列表
-     */
-    virtual PriceList getFundsCurve(const DatetimeList& dates, KQuery::KType ktype = KQuery::DAY) {
-        HKU_WARN("The subclass does not implement this method");
-        return PriceList();
-    }
-
-    /**
-     * 获取收益曲线，即扣除历次存入资金后的资产净值曲线
-     * @param dates 日期列表，根据该日期列表获取其对应的收益曲线，应为递增顺序
-     * @param ktype K线类型，必须与日期列表匹配，默认为KQuery::DAY
-     * @return 收益曲线
-     */
-    virtual PriceList getProfitCurve(const DatetimeList& dates, KQuery::KType ktype = KQuery::DAY) {
-        HKU_WARN("The subclass does not implement this method");
-        return PriceList();
-    }
-
-    /**
      * 直接加入交易记录
      * @note 如果加入初始化账户记录，将清除全部已有交易及持仓记录
      * @param tr 待加入的交易记录
      * @return bool true 成功 | false 失败
      */
     virtual bool addTradeRecord(const TradeRecord& tr) {
+        HKU_WARN("The subclass does not implement this method");
+        return false;
+    }
+
+    /**
+     * 直接加入持仓记录
+     * @param pr 持仓记录
+     * @return true 成功
+     * @return false 失败
+     */
+    virtual bool addPosition(const PositionRecord& pr) {
         HKU_WARN("The subclass does not implement this method");
         return false;
     }
@@ -627,6 +691,14 @@ public:
      * @param path 输出文件所在目录
      */
     virtual void tocsv(const string& path) {
+        HKU_WARN("The subclass does not implement this method");
+    }
+
+    /**
+     * 从订单代理实例同步当前账户资产信息（包含资金、持仓等）
+     * @param broker 订单代理实例
+     */
+    virtual void fetchAssetInfoFromBroker(const OrderBrokerPtr& broker) {
         HKU_WARN("The subclass does not implement this method");
     }
 
@@ -665,9 +737,14 @@ private:
 #endif /* HKU_SUPPORT_SERIALIZATION */
 };
 
-#if HKU_SUPPORT_SERIALIZATION
-BOOST_SERIALIZATION_ASSUME_ABSTRACT(TradeManagerBase)
-#endif
+inline void TradeManagerBase::baseCheckParam(const string& name) const {
+    if ("precision" == name) {
+        int precision = getParam<int>("precision");
+        HKU_ASSERT(precision > 0);
+    }
+}
+
+inline void TradeManagerBase::paramChanged() {}
 
 /**
  * 客户程序应使用此类型进行实际操作
@@ -691,3 +768,11 @@ inline std::ostream& operator<<(std::ostream& os, const TradeManagerPtr& ptm) {
 }
 
 }  // namespace hku
+
+#if FMT_VERSION >= 90000
+template <>
+struct fmt::formatter<hku::TradeManagerBase> : ostream_formatter {};
+
+template <>
+struct fmt::formatter<hku::TradeManagerPtr> : ostream_formatter {};
+#endif

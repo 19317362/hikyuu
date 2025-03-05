@@ -23,7 +23,7 @@
 # SOFTWARE.
 
 from pytdx.hq import TDXParams
-from .common_pytdx import to_pytdx_market
+from hikyuu.data.common_pytdx import to_pytdx_market
 
 
 def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
@@ -35,20 +35,20 @@ def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
     pytdx_market = to_pytdx_market(market)
 
     total_count = 0
-    stockid_list = cur.execute("select stockid, code from Stock where marketid=%s" % (marketid))
+    stockid_list = cur.execute("select stockid, code from Stock where marketid=%s and valid=1" % (marketid))
     stockid_list = [x for x in stockid_list]
     cur.close()
 
     for stockrecord in stockid_list:
         stockid, code = stockrecord
-        #print("{}{}".format(market, code))
+        # print("{}{}".format(market, code))
 
         # 获取当前数据库中最后的一条权息记录的总股本和流通股本
         cur = connect.cursor()
         a = cur.execute(
             "select id, stockid, date, countAsGift, countForSell, priceForSell, \
                     bonus, countOfIncreasement, totalCount, \
-                    freeCount from stkweight where stockid=%s \
+                    freeCount, suogu from stkweight where stockid=%s \
                     order by date desc limit 1" % stockid
         )
         a = [x for x in a]
@@ -93,20 +93,25 @@ def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
                         new_last_db_weight[9] = round(xdxr['panhouliutong'])
                         update_last_db_weight = True
                         last_free_count = new_last_db_weight[9]
+                    if xdxr['suogu'] is not None:
+                        # etf 扩股
+                        new_last_db_weight[10] = xdxr['suogu']
+                        update_last_db_weight = True
                     continue
                 if date not in records:
                     records[date] = [
                         stockid,
                         date,
-                        int(10000 * xdxr['songzhuangu']) if xdxr['songzhuangu'] is not None else 0,  #countAsGift
-                        int(10000 * xdxr['peigu']) if xdxr['peigu'] is not None else 0,  #countForSell
-                        int(1000 * xdxr['peigujia']) if xdxr['peigujia'] is not None else 0,  #priceForSell
-                        int(1000 * xdxr['fenhong']) if xdxr['fenhong'] is not None else 0,  #bonus
-                        0,  #countOfIncreasement, pytdx 不区分送股和转增股，统一记在送股
+                        int(10000 * xdxr['songzhuangu']) if xdxr['songzhuangu'] is not None else 0,  # countForGift
+                        int(10000 * xdxr['peigu']) if xdxr['peigu'] is not None else 0,  # countForSell
+                        int(1000 * xdxr['peigujia']) if xdxr['peigujia'] is not None else 0,  # priceForSell
+                        int(1000 * xdxr['fenhong']) if xdxr['fenhong'] is not None else 0,  # bonus
+                        0,  # countOfIncreasement, pytdx 不区分送股和转增股，统一记在送股
                         round(xdxr['houzongguben'])
-                        if xdxr['houzongguben'] is not None else last_total_count,  #totalCount
+                        if xdxr['houzongguben'] is not None else last_total_count,  # totalCount
                         round(xdxr['panhouliutong'])
-                        if xdxr['panhouliutong'] is not None else last_free_count  #freeCount
+                        if xdxr['panhouliutong'] is not None else last_free_count,  # freeCount
+                        xdxr["suogu"] if xdxr["suogu"] is not None else 0
                     ]
                 else:
                     if xdxr['songzhuangu'] is not None:
@@ -121,6 +126,8 @@ def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
                         records[date][7] = round(xdxr['houzongguben'])
                     if xdxr['panhouliutong'] is not None:
                         records[date][8] = round(xdxr['panhouliutong'])
+                    if xdxr['suogu'] is not None:
+                        records[date][9] = xdxr['suogu']
                 if xdxr['houzongguben'] is not None:
                     last_total_count = round(xdxr['houzongguben'])
                 if xdxr['panhouliutong'] is not None:
@@ -135,8 +142,8 @@ def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
             x = new_last_db_weight
             cur.execute(
                 "UPDATE StkWeight SET countAsGift=%s, countForSell=%s, priceForSell=%s, \
-                    bonus=%s, totalCount=%s, freeCount=%s \
-                    where id=%s" % (x[3], x[4], x[5], x[6], x[8], x[9], x[0])
+                    bonus=%s, totalCount=%s, freeCount=%s, suogu=%s \
+                    where id=%s" % (x[3], x[4], x[5], x[6], x[8], x[9], x[10], x[0])
             )
             connect.commit()
             cur.close()
@@ -145,8 +152,8 @@ def pytdx_import_weight_to_sqlite(pytdx_api, connect, market):
             cur = connect.cursor()
             cur.executemany(
                 "INSERT INTO StkWeight(stockid, date, countAsGift, \
-                             countForSell, priceForSell, bonus, countOfIncreasement, totalCount, freeCount) \
-                             VALUES (?,?,?,?,?,?,?,?,?)", [x for x in records.values()]
+                             countForSell, priceForSell, bonus, countOfIncreasement, totalCount, freeCount, suogu) \
+                             VALUES (?,?,?,?,?,?,?,?,?,?)", [x for x in records.values()]
             )
             connect.commit()
             cur.close()
@@ -162,12 +169,12 @@ if __name__ == '__main__':
     from hikyuu.data.common_sqlite3 import create_database
     starttime = time.time()
 
-    dest_dir = "c:\\stock"
+    dest_dir = "d:\\stock"
     tdx_server = '119.147.212.81'
     tdx_port = 7709
     quotations = ['stock', 'fund']
 
-    connect = sqlite3.connect(dest_dir + "\\hikyuu.db")
+    connect = sqlite3.connect(dest_dir + "\\stock.db")
     create_database(connect)
 
     from pytdx.hq import TdxHq_API, TDXParams

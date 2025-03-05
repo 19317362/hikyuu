@@ -40,12 +40,13 @@
     :rtype: Indicator
 
 
-.. py:function:: ALIGN(data, ref):
+.. py:function:: ALIGN(data, ref[, fill_null=True])
 
     按指定的参考日期对齐
 
     :param Indicator data: 输入数据
-    :param ref: 指定做为日期参考的 DatetimeList、Indicator 或 KData
+    :param DatetimeList|Indicator|KData ref: 指定做为日期参考的 DatetimeList、Indicator 或 KData
+    :param bool fill_null: 缺失数据使用 nan 填充; 否则使用小于对应日期且最接近对应日期的数据
     :retype: Indicator
 
 .. py:function:: AMA([data, n=10, fast_n=2, slow_n=30])
@@ -167,6 +168,18 @@
     :rtype: Indicator
 
     
+.. py:function:: BLOCKSETNUM(block, query)
+
+    横向统计（返回板块股个数）, 两种调用方式:
+
+        BLOCKSET(block, query)
+        
+        BLOCKSET(stks, query)
+
+    :param Block block | sequence stks: 待统计的板块 或 stock list
+    :param Query query: 统计范围
+
+
 .. py:function:: CLOSE([data])
    
     获取收盘价，包装KData的收盘价成Indicator
@@ -200,13 +213,40 @@
     :rtype: Indicator
    
 
-.. py::function:: CORR(ind1, ind2, n)
+.. py:function:: CYCLE(kdata, [adjust_cycle=1], [adjust_mode='query'], [delay_to_trading_day=True])
+          
+    PF调仓周期指标，主要用于PF调仓日验证，及作为SG
+
+    :param KData kdata: K线数据
+    :param int adjust_cycle: 调整周期
+    :param string adjust_mode: 调整方式
+    :param bool delay_to_trading_day: 调整周期是否延至交易日
+    :rtype: Indicator
+
+
+.. py:function:: CONTEXT(ind)
+    
+    独立上下文。使用 ind 自带的上下文。当指定新的上下文时，不会改变已有的上下文。
+    例如：ind = CLOSE(k1), 当指定新的上下文 ind = ind(k2) 时，使用的是 k2 的收盘价。如想仍使用 k1 收盘价，
+    则需使用 ind = CONTEXT(CLOSE(k1)), 此时 ind(k2) 将仍旧使用 k1 的收盘价。
+    
+    :param Indicator ind: 指标对象
+    :rtype: Indicator
+
+.. py:function:: CONTEXT_K(ind)
+
+    获取指标上下文。Indicator::getContext()方法获取的是当前的上下文，但对于 CONTEXT 独立上下文指标无法获取其指定的独立上下文，需用此方法获取
+
+    :param Indicator ind: 指标对象
+    :rtype: KData
+
+.. py:function:: CORR(ind1, ind2, n)
 
     计算 ind1 和 ind2 的样本相关系数与协方差。返回中存在两个结果，第一个为相关系数，第二个为协方差。
 
     :param Indicator ind1: 指标1
     :param Indicator ind2: 指标2
-    :param int n: 按指定 n 的长度计算两个 ind 直接数据相关系数
+    :param int n: 按指定 n 的长度计算两个 ind 直接数据相关系数。如果为0，使用输入的ind长度。
     :rtype: Indicator    
 
 
@@ -307,6 +347,15 @@
     :rtype: Indicator
 
 
+.. py:function:: DISCARD(data, discard)
+    
+    以指标公式的方式设置指标结果的丢弃数据量。
+
+    :param Indicator data: 指标
+    :param int discard: 丢弃数据量
+    :rtype: Indicator
+
+
 .. py:function:: DMA(ind, a)
 
     动态移动平均
@@ -391,6 +440,18 @@
     :rtype: Indicator
 
 
+.. py:function:: FINANCE([kdata, ix, name])
+
+    获取历史财务信息。（可通过 StockManager.get_history_finance_all_fields 查询相应的历史财务字段信息）
+
+    ix, name 使用时，为二选一。即要不使用 ix，要不就使用 name 进行获取。
+
+    :param KData kdata: K线数据
+    :param int ix: 历史财务信息字段索引
+    :param int name: 历史财务信息字段名称
+    :rtype: Indicator
+
+
 .. py:function:: FLOOR([data])
 
     向下舍入(向数值减小方向舍入)取整
@@ -442,11 +503,56 @@
 
 .. py:function:: HSL(kdata)
 
-    获取换手率，等于 VOL(k) / CAPITAL(k)
+    获取换手率(百分比 x%)，等于 VOL(k) / CAPITAL(k)
     
     :param KData kdata: k线数据
     :rtype: Indicator
     
+.. py:function:: IC(ind, stks, query, ref_stk[, n=1, spearman=True])
+
+    计算指定的因子相对于参考证券的 IC （实际为 RankIC）
+    
+    :param sequence | Block stks 证券组合
+    :param Query query: 查询条件
+    :param Stock ref_stk: 参照证券，通常使用 sh000300 沪深300
+    :param int n: 时间窗口(对应的 n 日收益率)
+    :param bool spearman: 默认使用 spearman 计算相关系数，否则为 pearson
+    :rtype: Indicator
+
+
+.. py:function:: ICIR(ind, stks, query, ref_stk[, n=1, rolling_n=120, spearman=True])
+
+    计算 IC 因子 IR = IC的多周期均值/IC的标准方差
+
+    :param sequence | Block stks 证券组合
+    :param Query query: 查询条件
+    :param Stock ref_stk: 参照证券，通常使用 sh000300 沪深300
+    :param int n: 时间窗口(对应的 n 日收益率)
+    :param int rolling_n: 滚动周期
+    :param bool spearman: 默认使用 spearman 计算相关系数，否则为 pearson    
+    :rtype: Indicator
+
+
+.. py:function:: IR(p, b[, n=100])
+
+    信息比率（Information Ratio，IR）
+
+    公式: (P-B) / TE
+    P: 组合收益率
+    B: 比较基准收益率
+    TE: 投资周期中每天的 p 和 b 之间的标准差
+    实际使用时，P 一般为 TM 的资产曲线，B 为沪深 3000 收盘价，如:
+    ref_k = sm["sh000300"].get_kdata(query)
+    funds = my_tm.get_funds_curve(ref_k.get_datetime.list())
+    ir = IR(PRICELIST(funds), ref_k.close, 0)
+
+    如果希望计算因子 IC 的 IR 值，请使用 ICIR 指标
+
+    :param Indicator p:
+    :param Indicator b:
+    :param int n: 时间窗口（默认100），如果只想使用最后的值，可以使用 0, 或 len(p),len(b) 指定
+    :rtype: Indicator
+
     
 .. py:function:: IF(x, a, b)
 
@@ -462,11 +568,118 @@
     :rtype: Indicator
     
 
+.. py:function:: INBLOCK(data, category, name)        
+
+    当前上下文证券是否在指定的板块中。
+
+    :param KData data: 指定的K线数据(上下文)
+    :param string category: 板块类别
+    :param string name: 板块名称
+    :rtype: Indicator
+
+
+.. py:function:: INDEXC([kdata])
+    
+    返回对应的大盘收盘价,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXH([kdata])
+    
+    返回对应的大盘最高价,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXL([kdata])
+
+    返回对应的大盘最低价,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXO([kdata])
+    
+    返回对应的大盘开盘价,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXA([kdata])
+    
+    返回对应的大盘成交金额,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXV([kdata])
+
+    返回对应的大盘成交量,分别是上证指数,深证成指,科创50,创业板指
+
+
+.. py:function:: INDEXADV([query])
+    
+    通达信 880005 大盘上涨家数, 可能无法盘中更新!
+
+
+.. py:function:: INDEXDEC([query])
+    
+    通达信 880005 大盘下跌家数, 可能无法盘中更新!
+
+
+.. py:function:: INSUM(block, query, ind, mode)
+
+    返回板块各成分该指标相应输出按计算类型得到的计算值.计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+
+    用法:
+    
+        INSUM(block, query, ind, mode)
+
+        INSUM(stks, query, ind, mode)
+
+    :param Block block | sequence stks: 指定板块 或 证券列表
+    :param Query query: 指定范围
+    :param Indicator ind: 指定指标
+    :param int mode: 计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+    :rtype: Indicator    
+
+
 .. py:function:: INTPART([data])
 
     取整(绝对值减小取整，即取得数据的整数部分)
     
     :param data: 输入数据
+    :rtype: Indicator
+
+
+.. py:function:: ISNA(ind[, ignore_discard=False])
+
+    判断指标是否为 nan 值，若为 nan 值, 则返回1, 否则返回0.
+
+    :param Indicator ind: 指定指标
+    :param bool ignore_discard: 忽略指标丢弃数据
+
+
+.. py:function:: ISINF(ind)
+
+    判断指标是否为正无穷大 (+inf) 值，若为 +inf 值, 则返回1, 否则返回0。如判断负无穷大, 使用 ISINFA。
+
+    :param Indicator ind: 指定指标
+    :rtype: Indicator
+
+
+.. py:function:: ISINFA(ind)
+
+    判断指标是否为负无穷大 (-inf) 值，若为 -inf 值, 则返回1, 否则返回0。如判断正无穷大, 使用 ISINF。
+
+    :param Indicator ind: 指定指标
+    :rtype: Indicator
+
+
+.. py:function:: JUMPDOWN([ind])
+
+    边缘跳变，从小于等于0.0，跳变到 > 0.0
+    
+    :param Indicator ind: 指标
+    :rtype: Indicator
+
+
+.. py:function:: JUMPUP([ind])
+    
+    边缘跳变，从大于0.0，跳变到 <= 0.0
+    
+    :param Indicator ind: 指标
     :rtype: Indicator
 
     
@@ -516,6 +729,15 @@
     :param data: 输入数据
     :param int m: m周期
     :param int n: n周期
+    :rtype: Indicator
+
+
+.. py:function:: LASTVALUE(ind, [ignore_discard=False])
+
+    等同于通达信CONST指标。取输入指标最后值为常数, 即结果中所有值均为输入指标的最后值, 谨慎使用。含未来函数, 谨慎使用。
+
+    :param Indicator ind: 指标
+    :param bool ignore_discard: 忽略指标丢弃数据
     :rtype: Indicator
 
 
@@ -672,7 +894,7 @@
 
 .. py:function:: NOT([data])
 
-    求逻辑非。NOT(X)返回非X,即当X=0时返回1，否则返回0。
+    求逻辑非。NOT(X)返回非X,即当X<=0时返回1，否则返回0。
     
     :param Indicator data: 输入数据
     :rtype: Indicator
@@ -717,6 +939,58 @@
     
     :param Indicator data: 输入数据
     :param int n: 引用n周期前的值，即右移n位
+    :rtype: Indicator
+
+
+.. py:function:: RECOVER_BACKWARD([data])
+
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行后向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator
+
+
+.. py:function:: RECOVER_FORWARD([data])
+
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行前向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator
+
+
+.. py:function:: RECOVER_EQUAL_BACKWARD([data])
+
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行等比后向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator
+
+
+.. py:function:: RECOVER_EQUAL_FORWARD([data])
+
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行等比前向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator
+
+
+.. py:function:: REPLACE(ind, [old_value=constant.nan, new_value=0.0, ignore_discard=False]
+          
+    替换指标中指定值，默认为替换 nan 值为 0.0。
+
+    :param Indicator ind: 指定指标
+    :param double old_value: 指定值
+    :param double new_value: 替换值
+    :param bool ignore_discard: 忽略指标丢弃数据
+    :rtype: Indicator
+
+
+.. py:function:: RESULT(data, result_ix)
+
+    以公式指标的方式返回指定指标中的指定结果集
+
+    :param Indicator data: 指定的指标
+    :param int result_ix: 指定的结果集
     :rtype: Indicator
 
 
@@ -860,6 +1134,15 @@
     :param int n: 时间窗口
     :param float m: 系数
     :rtype: Indicator
+
+
+.. py:function:: SPEARMAN(ind1, ind2, n)
+
+    Spearman 相关系数
+
+    :param Indicator ind1: 输入参数1
+    :param Indicator ind2: 输入参数2
+    :param int n: 滚动窗口(大于2 或 等于0)，等于0时，代表 n 实际使用 ind 的长度
 
 
 .. py:function:: SQRT([data])
@@ -1018,9 +1301,49 @@
     :rtype: Indicator
 
 
+.. py:function:: WINNER([ind])
+    
+    获利盘比例
+
+    用法: WINNER(CLOSE)　表示以当前收市价卖出的获利盘比例。
+
+    例如: 返回0.1表示10%获利盘;WINNER(10.5)表示10.5元价格的获利盘比例
+
+    该函数仅对日线分析周期有效，且仅对存在流通盘权息数据的证券有效，对指数、基金等无效。
+
+
 .. py:function:: YEAR([data])
 
     取得该周期的年份。
 
     :param data: 输入数据 KData
+    :rtype: Indicator
+
+
+.. py:function:: ZHBOND10([data, default_val])
+
+    获取10年期中国国债收益率
+
+    :param DatetimeList|KDate|Indicator data: 输入的日期参考，优先使用上下文中的日期
+    :param float default_val: 如果输入的日期早于已有国债数据的最早记录，则使用此默认值
+
+
+.. py:function:: ZONGGUBEN([data])
+
+   获取总股本（单位：万股）
+
+   :param KData kdata: k线数据
+   :rtype: Indicator    
+
+
+.. py:function:: ZSCORE([data, out_extreme, nsigma, recursive])
+
+    对数据进行标准化（归一），可选进行极值排除
+
+    注：非窗口滚动，如需窗口滚动的标准化，直接 (x - MA(x, n)) / STDEV(x, n) 即可。
+    
+    :param Indicator data: 待剔除异常值的数据
+    :param bool outExtreme: 指示剔除极值，默认 False
+    :param float nsigma: 剔除极值时使用的 nsigma 倍 sigma ,默认 3.0
+    :param bool recursive: 是否进行递归剔除极值, 默认 False
     :rtype: Indicator

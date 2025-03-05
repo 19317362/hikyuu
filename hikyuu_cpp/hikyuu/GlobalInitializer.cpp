@@ -20,11 +20,15 @@
 #include <H5public.h>
 #endif
 
-#include "Log.h"
+#if HKU_ENABLE_TA_LIB
+#include <ta-lib/ta_libc.h>
+#endif
+
+#include "utilities/Log.h"
+#include "utilities/os.h"
 #include "hikyuu.h"
 #include "GlobalInitializer.h"
 #include "StockManager.h"
-#include "global/GlobalTaskGroup.h"
 #include "global/GlobalSpotAgent.h"
 #include "global/schedule/scheduler.h"
 #include "indicator/IndicatorImp.h"
@@ -50,17 +54,24 @@ void GlobalInitializer::init() {
     _CrtSetBreakAlloc(-1);
 #endif
 
-    fmt::print("Initialize hikyuu_{} ...\n", getVersionWithBuild());
-
-    initLogger();
-#if defined(_DEBUG) || defined(DEBUG)
-    set_log_level(LOG_LEVEL::LOG_TRACE);
+#if HKU_USE_LOW_PRECISION
+    fmt::print("Initialize hikyuu_{}_low_precision ...\n", getVersionWithBuild());
 #else
-    set_log_level(LOG_LEVEL::LOG_INFO);
+    fmt::print("Initialize hikyuu_{} ...\n", getVersionWithBuild());
 #endif
+
+    if (createDir(fmt::format("{}/.hikyuu", getUserDir()))) {
+        initLogger(false, fmt::format("{}/.hikyuu/hikyuu.log", getUserDir()));
+    } else {
+        initLogger();
+    }
 
 #if HKU_ENABLE_SEND_FEEDBACK
     sendFeedback();
+#endif
+
+#if HKU_ENABLE_TA_LIB
+    TA_Initialize();
 #endif
 
     DataDriverFactory::init();
@@ -70,29 +81,47 @@ void GlobalInitializer::init() {
 }
 
 void GlobalInitializer::clean() {
-    if (CanUpgrade()) {
+#if HKU_ENABLE_SEND_FEEDBACK
+    if (runningInPython() && CanUpgrade()) {
         fmt::print(
-          "\n========================================================\n"
-          "A new version ({}) is available and can be upgraded.\n"
+          "\n====================================================================\n"
+          "The new version of Hikyuu is {}, and you can run the upgrade command:\n"
+          "Hikyuu 的最新版本是 {}, 您可以运行升级命令:\n"
+          "pip install hikyuu --upgrade\n"
           "========================================================\n\n",
-          getLatestVersion());
+          getLatestVersion(), getLatestVersion());
     }
+#endif
 
-    releaseGlobalTaskGroup();
     releaseScheduler();
     releaseGlobalSpotAgent();
 
     IndicatorImp::releaseDynEngine();
+
+    // 主动停止异步数据加载任务组，否则 hdf5 在 linux 下会报关闭异常
+    auto *tg = StockManager::instance().getLoadTaskGroup();
+    if (tg) {
+        tg->stop();
+    }
+
+#if HKU_ENABLE_TA_LIB
+    TA_Shutdown();
+#endif
+
+#if HKU_ENABLE_LEAK_DETECT || defined(MSVC_LEAKER_DETECT)
+    // 非内存泄漏检测时，内存让系统自动释放，避免某些场景下 windows 下退出速度过慢
     StockManager::quit();
+#else
+    fmt::print("Quit Hikyuu system!\n\n");
+#endif
+
     DataDriverFactory::release();
 
 #if HKU_ENABLE_HDF5_KDATA
     H5close();
 #endif
 
-#if USE_SPDLOG_LOGGER
     spdlog::drop_all();
-#endif
 
 #ifdef MSVC_LEAKER_DETECT
     // MSVC 内存泄露检测，输出至 VS 的输出窗口

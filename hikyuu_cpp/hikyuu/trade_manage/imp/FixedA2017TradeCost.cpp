@@ -23,6 +23,18 @@ FixedA2017TradeCost::FixedA2017TradeCost() : TradeCostBase("TC_FixedA2017") {
 
 FixedA2017TradeCost::~FixedA2017TradeCost() {}
 
+void FixedA2017TradeCost::_checkParam(const string& name) const {
+    if ("commission" == name) {
+        HKU_ASSERT(getParam<price_t>("commission") >= 0.0);
+    } else if ("lowest_commission" == name) {
+        HKU_ASSERT(getParam<price_t>("lowest_commission") >= 0.0);
+    } else if ("stamptax" == name) {
+        HKU_ASSERT(getParam<price_t>("stamptax") >= 0.0);
+    } else if ("transferfee" == name) {
+        HKU_ASSERT(getParam<price_t>("transferfee") >= 0.0);
+    }
+}
+
 CostRecord FixedA2017TradeCost::getBuyCost(const Datetime& datetime, const Stock& stock,
                                            price_t price, double num) const {
     CostRecord result;
@@ -73,17 +85,17 @@ CostRecord FixedA2017TradeCost::getSellCost(const Datetime& datetime, const Stoc
 }
 
 TradeCostPtr FixedA2017TradeCost::_clone() {
-    return TradeCostPtr(new FixedA2017TradeCost());
+    return make_shared<FixedA2017TradeCost>();
 }
 
 TradeCostPtr HKU_API TC_FixedA2017(price_t commission, price_t lowestCommission, price_t stamptax,
                                    price_t transferfee) {
-    FixedA2017TradeCost* p = new FixedA2017TradeCost();
+    TradeCostPtr p = make_shared<FixedA2017TradeCost>();
     p->setParam<price_t>("commission", commission);
     p->setParam<price_t>("lowest_commission", lowestCommission);
     p->setParam<price_t>("stamptax", stamptax);
     p->setParam<price_t>("transferfee", transferfee);
-    return TradeCostPtr(p);
+    return p;
 }
 
 } /* namespace hku */

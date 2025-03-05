@@ -19,7 +19,7 @@ namespace hku {
  * SQLite Statemen
  * @ingroup DBConnect
  */
-class HKU_API SQLiteStatement : public SQLStatementBase {
+class HKU_UTILS_API SQLiteStatement : public SQLStatementBase {
 public:
     SQLiteStatement() = delete;
 
@@ -28,7 +28,7 @@ public:
      * @param driver 数据库连接
      * @param sql_statement SQL语句
      */
-    SQLiteStatement(DBConnectBase *driver, const string &sql_statement);
+    SQLiteStatement(DBConnectBase *driver, const std::string &sql_statement);
 
     /** 析构函数 */
     virtual ~SQLiteStatement();
@@ -44,7 +44,7 @@ public:
     virtual void sub_bindText(int idx, const std::string &item) override;
     virtual void sub_bindText(int idx, const char *item, size_t len) override;
     virtual void sub_bindBlob(int idx, const std::string &item) override;
-    virtual void sub_bindBlob(int idx, const char *item, size_t len) override;
+    virtual void sub_bindBlob(int idx, const std::vector<char> &item) override;
 
     virtual int sub_getNumColumns() const override;
     virtual void sub_getColumnAsInt64(int idx, int64_t &item) override;
@@ -52,6 +52,7 @@ public:
     virtual void sub_getColumnAsDatetime(int idx, Datetime &item) override;
     virtual void sub_getColumnAsText(int idx, std::string &item) override;
     virtual void sub_getColumnAsBlob(int idx, std::string &item) override;
+    virtual void sub_getColumnAsBlob(int idx, std::vector<char> &item) override;
 
 private:
     void _reset();

@@ -25,8 +25,8 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
 
-#ifndef HKU_API
-#define HKU_API
+#ifndef HKU_UTILS_API
+#define HKU_UTILS_API
 #endif
 
 namespace hku {
@@ -40,7 +40,7 @@ namespace hku {
 #ifdef _MSC_VER
 class ThreadPool {
 #else
-class HKU_API ThreadPool {
+class HKU_UTILS_API ThreadPool {
 #endif
 public:
     /**
@@ -93,11 +93,11 @@ public:
 
     /** 向线程池提交任务 */
     template <typename FunctionType>
-    task_handle<typename std::result_of<FunctionType()>::type> submit(FunctionType f) {
+    auto submit(FunctionType f) {
         if (m_thread_need_stop.isSet() || m_done) {
             throw std::logic_error("You can't submit a task to the stopped task group!");
         }
-        typedef typename std::result_of<FunctionType()>::type result_type;
+        typedef typename std::invoke_result<FunctionType>::type result_type;
         std::packaged_task<result_type()> task(f);
         task_handle<result_type> res(task.get_future());
         m_master_work_queue.push(std::move(task));
@@ -133,7 +133,7 @@ public:
             if (m_interrupt_flags[i]) {
                 m_interrupt_flags[i]->set();
             }
-            m_master_work_queue.push(std::move(FuncWrapper()));
+            m_master_work_queue.push(FuncWrapper());
         }
 
         for (size_t i = 0; i < m_worker_num; i++) {
@@ -168,7 +168,7 @@ public:
         }
 
         for (size_t i = 0; i < m_worker_num; i++) {
-            m_master_work_queue.push(std::move(FuncWrapper()));
+            m_master_work_queue.push(FuncWrapper());
         }
 
         // 等待线程结束

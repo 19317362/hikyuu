@@ -10,5 +10,7 @@
 #define ENVIRONMENT_BUILD_IN_H_
 
 #include "crt/EV_TwoLine.h"
+#include "crt/EV_Bool.h"
+#include "crt/EV_Manual.h"
 
 #endif /* ENVIRONMENT_BUILD_IN_H */

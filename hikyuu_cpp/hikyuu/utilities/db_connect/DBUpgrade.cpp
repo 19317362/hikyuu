@@ -6,23 +6,73 @@
  */
 
 #include "DBUpgrade.h"
-#include "../../debug.h"
+
+#include "hikyuu/utilities/config.h"
+#if HKU_ENABLE_MYSQL
+#include "mysql/MySQLConnect.h"
+#endif
+
+#if HKU_ENABLE_SQLITE
+#include "sqlite/SQLiteConnect.h"
+#endif
 
 namespace hku {
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
+#if HKU_ENABLE_SQLITE
+static bool isSQLite(DBConnectBase *db) {
+    SQLiteConnect *sqlite = dynamic_cast<SQLiteConnect *>(db);
+    return sqlite != nullptr;
+}
+#endif
+
+#if HKU_ENABLE_MYSQL
+static bool isMySQL(DBConnectBase *db) {
+    MySQLConnect *mysql = dynamic_cast<MySQLConnect *>(db);
+    return mysql != nullptr;
+}
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 /*
  * 升级和创建数据库
  */
-void HKU_API DBUpgrade(const DBConnectPtr &driver, const char *module_name,
-                       const std::vector<string> &upgrade_scripts, int start_version,
-                       const char *create_script) {
+void HKU_UTILS_API DBUpgrade(const DBConnectPtr &driver, const char *module_name,
+                             const std::vector<std::string> &upgrade_scripts, int start_version,
+                             const char *create_script) {
     HKU_TRACE("check {} database version ...", module_name);
 
     // 如果模块版本表不存在，则创建该表
     if (!driver->tableExist("module_version")) {
-        driver->exec(
-          "CREATE TABLE `module_version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT,`module` TEXT, "
-          "`version` INTEGER NOT NULL);");
+        bool need_create = true;
+#if HKU_ENABLE_SQLITE
+        if (need_create && isSQLite(driver.get())) {
+            driver->exec(
+              "CREATE TABLE `module_version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT,`module` "
+              "TEXT, "
+              "`version` INTEGER NOT NULL);");
+            need_create = false;
+        }
+#endif
+
+#if HKU_ENABLE_MYSQL
+        if (need_create && isMySQL(driver.get())) {
+            driver->exec(
+              R"(CREATE TABLE `module_version` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `module` varchar(20) DEFAULT NULL,
+  `version` int NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;)");
+            need_create = false;
+        }
+#endif
     }
 
     // 如果没有升级脚本，也没有创建脚本，则直接返回
@@ -75,7 +125,7 @@ void HKU_API DBUpgrade(const DBConnectPtr &driver, const char *module_name,
     // 当前版本已经大于等于待升至的版本，无需升级，直接返回
     if (version >= to_version) {
         HKU_TRACE("current version({}) greater the upgrade version({}), ignored!", version,
-                 to_version);
+                  to_version);
         return;
     }
 

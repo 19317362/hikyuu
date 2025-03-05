@@ -13,29 +13,6 @@
 #include "../../utilities/Parameter.h"
 #include "../../trade_manage/TradeManager.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-
-#if HKU_SUPPORT_XML_ARCHIVE
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#endif /* HKU_SUPPORT_XML_ARCHIVE */
-
-#if HKU_SUPPORT_TEXT_ARCHIVE
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#endif /* HKU_SUPPORT_TEXT_ARCHIVE */
-
-#if HKU_SUPPORT_BINARY_ARCHIVE
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#endif /* HKU_SUPPORT_BINARY_ARCHIVE */
-
-#include <boost/serialization/export.hpp>
-#endif /* HKU_SUPPORT_SERIALIZATION */
-
 namespace hku {
 
 /**
@@ -44,11 +21,12 @@ namespace hku {
  * @ingroup ProfitGoal
  */
 class HKU_API ProfitGoalBase : public enable_shared_from_this<ProfitGoalBase> {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     ProfitGoalBase();
-    ProfitGoalBase(const string& name);
+    explicit ProfitGoalBase(const string& name);
+    ProfitGoalBase(const ProfitGoalBase&) = default;
     virtual ~ProfitGoalBase();
 
     /** 设置账户 */
@@ -163,7 +141,7 @@ private:                                                         \
 #define PROFITGOAL_IMP(classname)                               \
 public:                                                         \
     virtual ProfitGoalPtr _clone() override {                   \
-        return ProfitGoalPtr(new classname());                  \
+        return std::make_shared<classname>();                   \
     }                                                           \
     virtual price_t getGoal(const Datetime&, price_t) override; \
     virtual void _calculate() override;
@@ -196,10 +174,6 @@ inline const string& ProfitGoalBase::name() const {
 
 inline void ProfitGoalBase::name(const string& name) {
     m_name = name;
-}
-
-inline void ProfitGoalBase::reset() {
-    _reset();
 }
 
 } /* namespace hku */

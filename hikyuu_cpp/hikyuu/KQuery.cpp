@@ -55,7 +55,7 @@ static const unordered_map<string, int32_t> g_ktype2min{
 };
 
 // 获取所有的 KType
-vector<string>& KQuery::getAllKType() {
+const vector<KQuery::KType>& KQuery::getAllKType() {
     return g_all_ktype;
 }
 
@@ -63,7 +63,18 @@ int32_t KQuery::getKTypeInMin(KType ktype) {
     return g_ktype2min.at(ktype);
 }
 
-KQuery::KQuery(Datetime start, Datetime end, KType ktype, RecoverType recoverType)
+bool KQuery::isKType(const string& ktype) {
+    string nktype(ktype);
+    to_upper(nktype);
+    for (const auto& v : g_all_ktype) {
+        if (nktype == v) {
+            return true;
+        }
+    }
+    return false;
+}
+
+KQuery::KQuery(Datetime start, Datetime end, const KType& ktype, RecoverType recoverType)
 : m_start(start == Null<Datetime>() ? (int64_t)start.number()
                                     : (int64_t)(start.number() * 100 + start.second())),
   m_end(end == Null<Datetime>() ? (int64_t)end.number()
@@ -165,14 +176,24 @@ HKU_API std::ostream& operator<<(std::ostream& os, const KQuery& query) {
 
 bool HKU_API operator!=(const KQuery& q1, const KQuery& q2) {
     // cppcheck-suppress [mismatchingContainerExpression]
-    return q1.start() != q2.start() || q1.end() != q2.end() || q1.queryType() != q2.queryType() ||
-           q1.kType() != q2.kType() || q1.recoverType() != q2.recoverType();
+    HKU_IF_RETURN(q1.queryType() != q2.queryType(), true);
+    if (q1.queryType() == KQuery::DATE) {
+        return q1.kType() != q2.kType() || q1.recoverType() != q2.recoverType() ||
+               q1.startDatetime() != q2.startDatetime() || q1.endDatetime() != q2.endDatetime();
+    }
+    return q1.kType() != q2.kType() || q1.recoverType() != q2.recoverType() ||
+           q1.start() != q2.start() || q1.end() != q2.end();
 }
 
 bool HKU_API operator==(const KQuery& q1, const KQuery& q2) {
     // cppcheck-suppress [mismatchingContainerExpression]
-    return q1.start() == q2.start() && q1.end() == q2.end() && q1.queryType() == q2.queryType() &&
-           q1.kType() == q2.kType() && q1.recoverType() == q2.recoverType();
+    HKU_IF_RETURN(q1.queryType() != q2.queryType(), false);
+    if (q1.queryType() == KQuery::DATE) {
+        return q1.kType() == q2.kType() && q1.recoverType() == q2.recoverType() &&
+               q1.startDatetime() == q2.startDatetime() && q1.endDatetime() == q2.endDatetime();
+    }
+    return q1.kType() == q2.kType() && q1.recoverType() == q2.recoverType() &&
+           q1.start() == q2.start() && q1.end() == q2.end();
 }
 
 }  // namespace hku

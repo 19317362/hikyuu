@@ -31,6 +31,9 @@ void export_StockManager(py::module& m) {
      param hikyuu_param 其他参数
      param StrategyContext context 策略上下文, 默认加载全部证券)")
 
+      .def_property_readonly("data_ready", &StockManager::dataReady,
+                             "是否所有数据已准备就绪（加载完毕）")
+
       .def("reload", &StockManager::reload, "重新加载所有证券数据")
 
       .def("tmpdir", &StockManager::tmpdir, R"(tmpdir(self) -> str
@@ -51,6 +54,8 @@ void export_StockManager(py::module& m) {
            py::return_value_policy::copy, "获取当前预加载参数")
       .def("get_hikyuu_parameter", &StockManager::getHikyuuParameter, py::return_value_policy::copy,
            "获取当前其他参数")
+      .def("get_context", &StockManager::getStrategyContext, py::return_value_policy::copy,
+           "获取当前上下文")
 
       .def("get_market_list", &StockManager::getAllMarket, R"(get_market_list(self)
 
@@ -83,6 +88,26 @@ void export_StockManager(py::module& m) {
     :return: 对应的证券实例，如果实例不存在，则Null<Stock>()，不抛出异常
     :rtype: Stock)")
 
+      .def(
+        "get_stock_list",
+        [](const StockManager& self, py::object filter) {
+            StockList ret;
+            if (filter.is_none()) {
+                ret = self.getStockList();
+            } else {
+                HKU_CHECK(py::hasattr(filter, "__call__"), "filter not callable!");
+                py::object filter_func = filter.attr("__call__");
+                ret = self.getStockList(
+                  [&](const Stock& stk) { return filter_func(stk).cast<bool>(); });
+            }
+            return ret;
+        },
+        py::arg("filter") = py::none(), R"(get_stock_list(self[, filter=None])
+        
+    获取证券列表
+
+    :param func filter: 输入参数为 stock, 返回 True | False 的过滤函数)")
+
       .def("get_block", &StockManager::getBlock, R"(get_block(self, category, name)
 
     获取预定义的板块
@@ -91,6 +116,28 @@ void export_StockManager(py::module& m) {
     :param str name: 板块名称
     :return: 板块，如找不到返回空Block
     :rtype: Block)")
+
+      .def("add_block", &StockManager::addBlock, R"(add_block(self, block)
+      
+    将独立的板块加入到数据库中， 板块通过 category+name 区分， 数据库中相同板块将被覆盖。注意，如果板块发生变化，需要调用 save_block 重新保存。
+      
+    :param Block block: 板块实例)")
+
+      .def("save_block", &StockManager::saveBlock, R"(save_block(self, block)
+      
+    保存发生变化后的板块保存至数据库
+
+    :param Block block: 板块实例)")
+
+      .def("remove_block",
+           py::overload_cast<const string&, const string&>(&StockManager::removeBlock),
+           py::arg("category"), py::arg("name"))
+      .def("remove_block", py::overload_cast<const Block&>(&StockManager::removeBlock),
+           py::arg("block"), R"(remove_block(self, block)
+           
+    从数据库中删除板块
+    
+    :param Block block: 板块实例)")
 
       .def("get_block_list", py::overload_cast<>(&StockManager::getBlockList))
       .def("get_block_list", py::overload_cast<const string&>(&StockManager::getBlockList),
@@ -127,6 +174,8 @@ void export_StockManager(py::module& m) {
     CSV文件第一行为标题，需含有
     Datetime（或Date、日期）、OPEN（或开盘价）、HIGH（或最高价）、LOW（或最低价）、CLOSE（或收盘价）、AMOUNT（或成交金额）、VOLUME（或VOL、COUNT、成交量）。
 
+    注意：请确保 csv 使用 utf8 格式存储，否则无法识别中文
+
     :param str code: 自行编号的证券代码，不能和已有的Stock相同，否则将返回Null<Stock>
     :param str day_filename: 日线CSV文件名
     :param str min_filename: 分钟线CSV文件名
@@ -151,6 +200,40 @@ void export_StockManager(py::module& m) {
     判断日期是否为节假日
 
     :param Datetime d: 待判断的日期)")
+
+      .def("get_history_finance_field_name", &StockManager::getHistoryFinanceFieldName,
+           py::return_value_policy::copy, R"(get_history_finance_field_name(self, index)
+           
+    根据字段索引，获取历史财务信息相应字段名)")
+
+      .def("get_history_finance_field_index", &StockManager::getHistoryFinanceFieldIndex,
+           R"(get_history_finance_field_index(self, name)
+    
+    根据字段名称，获取历史财务信息相应字段索引)")
+
+      .def(
+        "get_history_finance_all_fields",
+        [](const StockManager& sm) {
+            auto fields = sm.getHistoryFinanceAllFields();
+            py::list ret;
+            for (const auto& f : fields) {
+                ret.append(py::make_tuple(f.first, f.second));
+            }
+            return ret;
+        },
+        R"(get_history_finance_all_fields(self)
+    获取所有历史财务信息字段及其索引)")
+
+      .def("add_stock", &StockManager::addStock, R"(add_stock(self, stock)
+      
+    谨慎调用！！！仅供增加某些临时的外部 Stock
+    @return True | False)")
+
+      .def("remove_stock", &StockManager::removeStock, R"(remove_stock(self, market_code)
+    
+    从 sm 中移除 market_code 代表的证券，谨慎使用！！！通常用于移除临时增加的外部 Stock
+    
+    :param str market_code: 证券市场标识)")
 
       .def("__len__", &StockManager::size, "返回证券数量")
       .def("__getitem__", &StockManager::getStock, "同 get_stock")

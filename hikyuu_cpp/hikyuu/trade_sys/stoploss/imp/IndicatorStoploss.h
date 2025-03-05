@@ -16,8 +16,8 @@ namespace hku {
 
 class IndicatorStoploss : public StoplossBase {
 public:
-    IndicatorStoploss();  //仅用于序列化默认构造函数
-    IndicatorStoploss(const Indicator& op, const string& kdata_part);
+    IndicatorStoploss();  // 仅用于序列化默认构造函数
+    explicit IndicatorStoploss(const Indicator& ind);
     virtual ~IndicatorStoploss();
 
     virtual price_t getPrice(const Datetime& datetime, price_t price) override;
@@ -26,11 +26,11 @@ public:
     virtual void _calculate() override;
 
 private:
-    Indicator m_op;
+    Indicator m_ind;
     map<Datetime, price_t> m_result;
 
 //========================================
-//序列化支持
+// 序列化支持
 //========================================
 #if HKU_SUPPORT_SERIALIZATION
 private:
@@ -38,7 +38,7 @@ private:
     template <class Archive>
     void serialize(Archive& ar, const unsigned int version) {
         ar& BOOST_SERIALIZATION_BASE_OBJECT_NVP(StoplossBase);
-        ar& BOOST_SERIALIZATION_NVP(m_op);
+        ar& BOOST_SERIALIZATION_NVP(m_ind);
         // m_result 每次系统运行时都要重新计算，不保存
         // ar & BOOST_SERIALIZATION_NVP(m_result);
     }

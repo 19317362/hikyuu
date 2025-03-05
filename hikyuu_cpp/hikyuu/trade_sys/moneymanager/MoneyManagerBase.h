@@ -13,29 +13,6 @@
 #include "../system/SystemPart.h"
 #include "../../trade_manage/TradeManager.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/shared_ptr.hpp>
-#include <boost/serialization/assume_abstract.hpp>
-#include <boost/serialization/base_object.hpp>
-
-#if HKU_SUPPORT_XML_ARCHIVE
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#endif /* HKU_SUPPORT_XML_ARCHIVE */
-
-#if HKU_SUPPORT_TEXT_ARCHIVE
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#endif /* HKU_SUPPORT_TEXT_ARCHIVE */
-
-#if HKU_SUPPORT_BINARY_ARCHIVE
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#endif /* HKU_SUPPORT_BINARY_ARCHIVE */
-
-#include <boost/serialization/export.hpp>
-#endif /* HKU_SUPPORT_SERIALIZATION */
-
 namespace hku {
 
 /**
@@ -43,11 +20,12 @@ namespace hku {
  * @ingroup MoneyManager
  */
 class HKU_API MoneyManagerBase : public enable_shared_from_this<MoneyManagerBase> {
-    PARAMETER_SUPPORT
+    PARAMETER_SUPPORT_WITH_CHECK
 
 public:
     MoneyManagerBase();
-    MoneyManagerBase(const string& name);
+    explicit MoneyManagerBase(const string& name);
+    MoneyManagerBase(const MoneyManagerBase&) = default;
     virtual ~MoneyManagerBase();
 
     /** 获取名称 */
@@ -61,9 +39,7 @@ public:
     }
 
     /** 复位 */
-    void reset() {
-        _reset();
-    }
+    void reset();
 
     /**
      * 设定交易账户
@@ -95,11 +71,17 @@ public:
     /** 克隆操作 */
     MoneyManagerPtr clone();
 
-    /** 接收实际交易变化情况，一般存在多次增减仓的情况才需要重载 */
-    virtual void buyNotify(const TradeRecord&);
+    /** 接收实际交易变化情况 */
+    void buyNotify(const TradeRecord& tr);
 
-    /** 接收实际交易变化情况，一般存在多次增减仓的情况才需要重载 */
-    virtual void sellNotify(const TradeRecord&);
+    /** 子类接收实际交易变化情况接口，一般存在多次增减仓的情况才需要重载 */
+    virtual void _buyNotify(const TradeRecord&) {}
+
+    /** 接收实际交易变化情况 */
+    void sellNotify(const TradeRecord& tr);
+
+    /** 子类接收实际交易变化情况接口，一般存在多次增减仓的情况才需要重载 */
+    virtual void _sellNotify(const TradeRecord&) {}
 
     /**
      * 获取指定交易对象可卖出的数量
@@ -146,6 +128,12 @@ public:
     double getBuyNumber(const Datetime& datetime, const Stock& stock, price_t price, price_t risk,
                         SystemPart from);
 
+    /** 当前买入交易次数, 连续买入计数，一旦接收卖出将恢复置0 */
+    size_t currentBuyCount(const Stock&) const;
+
+    /** 当前卖出交易次数，连续卖出计数，一旦接收买入将恢复置0 */
+    size_t currentSellCount(const Stock&) const;
+
     virtual double _getBuyNumber(const Datetime& datetime, const Stock& stock, price_t price,
                                  price_t risk, SystemPart from) = 0;
 
@@ -168,6 +156,7 @@ protected:
     string m_name;
     KQuery m_query;
     TradeManagerPtr m_tm;
+    unordered_map<Stock, std::pair<size_t, size_t>> m_buy_sell_counts;
 
 //============================================
 // 序列化支持
@@ -233,7 +222,7 @@ typedef shared_ptr<MoneyManagerBase> MMPtr;
 #define MONEY_MANAGER_IMP(classname)                                                          \
 public:                                                                                       \
     virtual MoneyManagerPtr _clone() override {                                               \
-        return MoneyManagerPtr(new classname());                                              \
+        return std::make_shared<classname>();                                                 \
     }                                                                                         \
     virtual double _getBuyNumber(const Datetime& datetime, const Stock& stock, price_t price, \
                                  price_t risk, SystemPart from) override;

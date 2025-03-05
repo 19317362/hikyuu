@@ -6,7 +6,7 @@
  */
 
 #include <boost/lexical_cast.hpp>
-#include "../../../Log.h"
+#include "hikyuu/utilities/Log.h"
 #include "MySQLKDataDriver.h"
 #include "KRecordTable.h"
 
@@ -21,7 +21,7 @@ MySQLKDataDriver::~MySQLKDataDriver() {
 }
 
 bool MySQLKDataDriver::_init() {
-    HKU_ASSERT_M(m_connect == nullptr, "Maybe repeat initialization!");
+    HKU_CHECK(m_connect == nullptr, "Maybe repeat initialization!");
     Parameter connect_param;
     connect_param.set<string>("db", "");  // 数据库名称须在SQL语句中明确指定
     connect_param.set<string>("host", getParamFromOther<string>(m_params, "host", "127.0.0.1"));
@@ -35,7 +35,7 @@ bool MySQLKDataDriver::_init() {
 }
 
 string MySQLKDataDriver ::_getTableName(const string& market, const string& code,
-                                        KQuery::KType ktype) {
+                                        const KQuery::KType& ktype) {
     string table = fmt::format("`{}_{}`.`{}`", market, KQuery::getKTypeName(ktype), code);
     to_lower(table);
     return table;
@@ -54,7 +54,8 @@ KRecordList MySQLKDataDriver::getKRecordList(const string& market, const string&
 }
 
 KRecordList MySQLKDataDriver::_getKRecordList(const string& market, const string& code,
-                                              KQuery::KType kType, size_t start_ix, size_t end_ix) {
+                                              const KQuery::KType& kType, size_t start_ix,
+                                              size_t end_ix) {
     KRecordList result;
     HKU_IF_RETURN(start_ix >= end_ix, result);
 
@@ -88,7 +89,7 @@ KRecordList MySQLKDataDriver::_getKRecordList(const string& market, const string
 }
 
 KRecordList MySQLKDataDriver::_getKRecordList(const string& market, const string& code,
-                                              KQuery::KType ktype, Datetime start_date,
+                                              const KQuery::KType& ktype, Datetime start_date,
                                               Datetime end_date) {
     KRecordList result;
     HKU_IF_RETURN(start_date >= end_date, result);
@@ -122,7 +123,8 @@ KRecordList MySQLKDataDriver::_getKRecordList(const string& market, const string
     return result;
 }
 
-size_t MySQLKDataDriver::getCount(const string& market, const string& code, KQuery::KType kType) {
+size_t MySQLKDataDriver::getCount(const string& market, const string& code,
+                                  const KQuery::KType& kType) {
     size_t result = 0;
 
     try {
@@ -191,9 +193,9 @@ TimeLineList MySQLKDataDriver::_getTimeLineListByDate(const string& market, cons
         m_connect->transaction();
         st->exec();
         while (st->moveNext()) {
-            uint64_t date = 0;
-            double price = 0.0, vol = 0.0;
             try {
+                uint64_t date = 0;
+                double price = 0.0, vol = 0.0;
                 st->getColumn(0, date, price, vol);
                 result.emplace_back(Datetime(date), price, vol);
             } catch (const std::exception& e) {
@@ -245,9 +247,9 @@ TimeLineList MySQLKDataDriver::_getTimeLineListByIndex(const string& market, con
 
             st->exec();
             while (st->moveNext()) {
-                uint64_t date = 0;
-                double price = 0.0, vol = 0.0;
                 try {
+                    uint64_t date = 0;
+                    double price = 0.0, vol = 0.0;
                     st->getColumn(0, date, price, vol);
                     result.emplace_back(Datetime(date), price, vol);
                 } catch (const std::exception& e) {
@@ -292,15 +294,15 @@ TransList MySQLKDataDriver::_getTransListByDate(const string& market, const stri
         SQLStatementPtr st = m_connect->getStatement(
           fmt::format("select `date`, `price`, `vol`, `buyorsell` from {} where date >= {} and "
                       "date < {} order by date",
-                      table, query.startDatetime().number(), query.endDatetime().number()));
+                      table, query.startDatetime().ymdhms(), query.endDatetime().ymdhms()));
 
         m_connect->transaction();
         st->exec();
         while (st->moveNext()) {
-            uint64_t date = 0;
-            double price = 0.0, vol = 0.0;
-            int direct = 0;
             try {
+                uint64_t date = 0;
+                double price = 0.0, vol = 0.0;
+                int direct = 0;
                 st->getColumn(0, date, price, vol, direct);
                 result.emplace_back(Datetime(date), price, vol,
                                     static_cast<TransRecord::DIRECT>(direct));
@@ -353,10 +355,10 @@ TransList MySQLKDataDriver::_getTransListByIndex(const string& market, const str
 
             st->exec();
             while (st->moveNext()) {
-                uint64_t date = 0;
-                double price = 0.0, vol = 0.0;
-                int direct = 0;
                 try {
+                    uint64_t date = 0;
+                    double price = 0.0, vol = 0.0;
+                    int direct = 0;
                     st->getColumn(0, date, price, vol);
                     result.emplace_back(Datetime(date), price, vol,
                                         static_cast<TransRecord::DIRECT>(direct));

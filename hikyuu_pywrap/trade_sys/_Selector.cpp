@@ -6,6 +6,7 @@
  */
 
 #include <hikyuu/trade_sys/selector/build_in.h>
+#include <hikyuu/trade_sys/selector/imp/optimal/OptimalSelectorBase.h>
 #include "../pybind_utils.h"
 
 namespace py = pybind11;
@@ -16,6 +17,7 @@ class PySelectorBase : public SelectorBase {
 
 public:
     using SelectorBase::SelectorBase;
+    PySelectorBase(const SelectorBase& base) : SelectorBase(base) {}
 
     void _reset() override {
         PYBIND11_OVERLOAD(void, SelectorBase, _reset, );
@@ -25,33 +27,96 @@ public:
         PYBIND11_OVERLOAD_PURE(void, SelectorBase, _calculate, );
     }
 
-    SystemList getSelectedOnOpen(Datetime date) override {
-        PYBIND11_OVERLOAD_PURE_NAME(SystemList, SelectorBase, "get_selected_on_open",
-                                    getSelectedOnOpen, date);
+    void _addSystem(const SystemPtr& sys) override {
+        PYBIND11_OVERLOAD(void, SelectorBase, _addSystem, sys);
     }
 
-    SystemList getSelectedOnClose(Datetime date) override {
-        PYBIND11_OVERLOAD_PURE_NAME(SystemList, SelectorBase, "get_selected_on_close",
-                                    getSelectedOnClose, date);
+    void _removeAll() override {
+        PYBIND11_OVERLOAD(void, SelectorBase, _removeAll, );
+    }
+
+    SystemWeightList getSelected(Datetime date) override {
+        // PYBIND11_OVERLOAD_PURE_NAME(SystemWeightList, SelectorBase, "get_selected", getSelected,
+        //                             date);
+        auto self = py::cast(this);
+        py::sequence py_ret = self.attr("get_selected")(date);
+        auto c_ret = python_list_to_vector<SystemWeight>(py_ret);
+        return c_ret;
     }
 
     bool isMatchAF(const AFPtr& af) override {
         PYBIND11_OVERLOAD_PURE_NAME(bool, SelectorBase, "is_match_af", isMatchAF, af);
     }
+
+    string str() const override {
+        PYBIND11_OVERRIDE_NAME(string, SelectorBase, "__str__", str, );
+    }
 };
 
+#ifdef __GNUC__
+#pragma GCC visibility push(hidden)
+#endif
+class PyOptimalSelector : public OptimalSelectorBase {
+    OPTIMAL_SELECTOR_NO_PRIVATE_MEMBER_SERIALIZATION
+
+public:
+    PyOptimalSelector() : OptimalSelectorBase("SE_PyOptimal") {}
+    explicit PyOptimalSelector(const py::function& evalfunc)
+    : OptimalSelectorBase("SE_PyOptimal"), m_evaluate(evalfunc) {}
+    virtual ~PyOptimalSelector() = default;
+
+public:
+    virtual SelectorPtr _clone() override {
+        return std::make_shared<PyOptimalSelector>();
+    }
+
+    virtual double evaluate(const SYSPtr& sys, const Datetime& lastDate) noexcept override {
+        double ret = Null<double>();
+        try {
+            ret = m_evaluate(sys, lastDate).cast<double>();
+        } catch (const std::exception& e) {
+            HKU_ERROR(e.what());
+        } catch (...) {
+            HKU_ERROR("Unknown error!");
+        }
+        return ret;
+    }
+
+private:
+    // 目前无法序列化
+    py::function m_evaluate;
+};
+#ifdef __GNUC__
+#pragma GCC visibility pop
+#endif
+
+SEPtr crtSEOptimal(const py::function& evalfunc) {
+    return std::make_shared<PyOptimalSelector>(evalfunc);
+}
+
 void export_Selector(py::module& m) {
+    py::class_<SystemWeight>(m, "SystemWeight", py::dynamic_attr(),
+                             "系统权重系数结构，在资产分配时，指定对应系统的资产占比系数")
+      .def(py::init<>())
+      .def(py::init<const SystemPtr&, price_t>())
+      .def("__str__", to_py_str<SystemWeight>)
+      .def("__repr__", to_py_str<SystemWeight>)
+      .def_readwrite("sys", &SystemWeight::sys, "对应的 System 实例")
+      .def_readwrite("weight", &SystemWeight::weight)
+
+        DEF_PICKLE(SystemWeight);
+
     py::class_<SelectorBase, SEPtr, PySelectorBase>(
       m, "SelectorBase",
       R"(选择器策略基类，实现标的、系统策略的评估和选取算法，自定义选择器策略子类接口：
 
-    - get_selected_on_open - 【必须】获取指定时刻开盘时选择的系统实例列表
-    - get_selected_on_close - 【必须】获取指定时刻收盘时选择的系统实例列表
+    - get_selected - 【必须】获取指定时刻选择的系统实例列表
     - _calculate - 【必须】计算接口
     - _reset - 【可选】重置私有属性
     - _clone - 【必须】克隆接口)")
 
       .def(py::init<>())
+      .def(py::init<const SelectorBase&>())
       .def(py::init<const string&>(), R"(初始化构造函数
         
     :param str name: 名称)")
@@ -97,13 +162,22 @@ void export_Selector(py::module& m) {
     :param Stock stock: 加入的初始标的
     :param System sys: 系统策略原型)")
 
-      .def("add_stock_list", &SelectorBase::addStockList, py::arg("stk_list"), py::arg("sys"),
-           R"(add_stock_list(self, stk_list, sys)
+      .def(
+        "add_stock_list",
+        [](SelectorBase& self, py::sequence stk_list, const SYSPtr& sys) {
+            self.addStockList(python_list_to_vector<Stock>(stk_list), sys);
+        },
+        py::arg("stk_list"), py::arg("sys"),
+        R"(add_stock_list(self, stk_list, sys)
 
     加入初始标的列表及其系统策略原型
 
     :param StockList stk_list: 加入的初始标的列表
     :param System sys: 系统策略原型)")
+
+      .def("get_proto_sys_list", &SelectorBase::getProtoSystemList, py::return_value_policy::copy)
+      .def("get_real_sys_list", &SelectorBase::getRealSystemList, py::return_value_policy::copy)
+      .def("calculate", &SelectorBase::calculate)
 
       .def("_reset", &SelectorBase::_reset, "子类复位操作实现")
       .def("_calculate", &SelectorBase::_calculate, "【重载接口】子类计算接口")
@@ -114,34 +188,59 @@ void export_Selector(py::module& m) {
 
     :param AllocateFundsBase af: 资产分配算法)")
 
-      .def("get_selected_on_open", &SelectorBase::getSelectedOnOpen,
-           R"(get_selected_on_open(self, datetime)
+      .def("get_selected", &SelectorBase::getSelected,
+           R"(get_selected(self, datetime)
 
-    【重载接口】获取指定时刻开盘时选取的系统实例
-
-    :param Datetime datetime: 指定时刻
-    :return: 选取的系统实例列表
-    :rtype: SystemList)")
-
-      .def("get_selected_on_close", &SelectorBase::getSelectedOnClose,
-           R"(get_selected_on_close(self, datetime)
-
-    【重载接口】获取指定时刻收盘时选取的系统实例
+    【重载接口】获取指定时刻选取的系统实例
 
     :param Datetime datetime: 指定时刻
     :return: 选取的系统实例列表
     :rtype: SystemList)")
+
+      .def("add_sys", &SelectorBase::addSystem)
+      .def("add_sys_list", &SelectorBase::addSystemList)
+
+      .def("__add__",
+           [](const SelectorPtr& self, const SelectorPtr& other) { return self + other; })
+      .def("__add__", [](const SelectorPtr& self, double other) { return self + other; })
+      .def("__radd__", [](const SelectorPtr& self, double other) { return self + other; })
+
+      .def("__sub__",
+           [](const SelectorPtr& self, const SelectorPtr& other) { return self - other; })
+      .def("__sub__", [](const SelectorPtr& self, double other) { return self - other; })
+      .def("__rsub__", [](const SelectorPtr& self, double other) { return other - self; })
+
+      .def("__mul__",
+           [](const SelectorPtr& self, const SelectorPtr& other) { return self * other; })
+      .def("__mul__", [](const SelectorPtr& self, double other) { return self * other; })
+      .def("__rmul__", [](const SelectorPtr& self, double other) { return self * other; })
+
+      .def("__truediv__",
+           [](const SelectorPtr& self, const SelectorPtr& other) { return self / other; })
+      .def("__truediv__", [](const SelectorPtr& self, double other) { return self / other; })
+      .def("__rtruediv__", [](const SelectorPtr& self, double other) { return other / self; })
+
+      .def("__and__",
+           [](const SelectorPtr& self, const SelectorPtr& other) { return self & other; })
+      .def("__or__", [](const SelectorPtr& self, const SelectorPtr& other) { return self | other; })
 
         DEF_PICKLE(SEPtr);
 
-    m.def("SE_Fixed", py::overload_cast<>(SE_Fixed));
-    m.def("SE_Fixed", py::overload_cast<const StockList&, const SystemPtr&>(SE_Fixed),
-          R"(SE_Fixed([stk_list, sys])
+    m.def("SE_Fixed", [](double weight) { return SE_Fixed(weight); }, py::arg("weight") = 1.0);
+    m.def(
+      "SE_Fixed",
+      [](const py::sequence& pystks, const SystemPtr& sys, double weight) {
+          StockList stks = python_list_to_vector<Stock>(pystks);
+          return SE_Fixed(stks, sys, weight);
+      },
+      py::arg("stk_list"), py::arg("sys"), py::arg("weight") = 1.0,
+      R"(SE_Fixed([stk_list, sys])
 
     固定选择器，即始终选择初始划定的标的及其系统策略原型
 
     :param list stk_list: 初始划定的标的
     :param System sys: 系统策略原型
+    :param float weight: 默认权重
     :return: SE选择器实例)");
 
     m.def("SE_Signal", py::overload_cast<>(SE_Signal));
@@ -153,4 +252,50 @@ void export_Selector(py::module& m) {
     :param list stk_list: 初始划定的标的
     :param System sys: 系统策略原型
     :return: SE选择器实例)");
+
+    m.def("SE_MultiFactor", py::overload_cast<const MFPtr&, int>(SE_MultiFactor), py::arg("mf"),
+          py::arg("topn") = 10);
+    m.def(
+      "SE_MultiFactor",
+      [](const py::sequence& inds, int topn, int ic_n, int ic_rolling_n, const py::object& ref_stk,
+         bool spearman, const string& mode) {
+          IndicatorList c_inds = python_list_to_vector<Indicator>(inds);
+          Stock c_ref_stk = ref_stk.is_none() ? getStock("sh000300") : ref_stk.cast<Stock>();
+          return SE_MultiFactor(c_inds, topn, ic_n, ic_rolling_n, c_ref_stk, spearman, mode);
+      },
+      py::arg("inds"), py::arg("topn") = 10, py::arg("ic_n") = 5, py::arg("ic_rolling_n") = 120,
+      py::arg("ref_stk") = py::none(), py::arg("spearman") = true,
+      py::arg("mode") = "MF_ICIRWeight",
+      R"(SE_MultiFactor
+
+    创建基于多因子评分的选择器，两种创建方式
+
+    - 直接指定 MF:
+      :param MultiFactorBase mf: 直接指定的多因子合成算法
+      :param int topn: 只选取时间截面中前 topn 个系统
+
+    - 参数直接创建:
+      :param sequense(Indicator) inds: 原始因子列表
+      :param int topn: 只选取时间截面中前 topn 个系统，小于等于0时代表不限制
+      :param int ic_n: 默认 IC 对应的 N 日收益率
+      :param int ic_rolling_n: IC 滚动周期
+      :param Stock ref_stk: 参考证券 (未指定时，默认为 sh000300 沪深300)
+      :param bool spearman: 默认使用 spearman 计算相关系数，否则为 pearson
+      :param str mode: "MF_ICIRWeight" | "MF_ICWeight" | "MF_EqualWeight" 因子合成算法名称)");
+
+    m.def("crtSEOptimal", crtSEOptimal, R"(crtSEOptimal(func)
+    
+    快速创建自定义绩效评估函数的寻优选择器
+
+    :param func: 一个可调用对象，接收参数为 (sys, lastdate)，返回一个 float 数值)");
+
+    m.def("SE_MaxFundsOptimal", SE_MaxFundsOptimal, "账户资产最大寻优选择器");
+
+    m.def("SE_PerformanceOptimal", SE_PerformanceOptimal, py::arg("key") = "帐户平均年收益率%",
+          py::arg("mode") = 0, R"(SE_PerformanceOptimal(key="帐户平均年收益率%", mode=0)
+
+    使用 Performance 统计结果进行寻优的选择器
+
+    :param string key: Performance 统计项
+    :param int mode:  0 取统计结果最大的值系统 | 1 取统计结果为最小值的系统)");
 }

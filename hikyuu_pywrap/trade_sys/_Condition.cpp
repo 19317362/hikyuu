@@ -16,6 +16,7 @@ class PyConditionBase : public ConditionBase {
 
 public:
     using ConditionBase::ConditionBase;
+    PyConditionBase(const ConditionBase& base) : ConditionBase(base) {}
 
     void _calculate() override {
         PYBIND11_OVERLOAD_PURE(void, ConditionBase, _calculate, );
@@ -28,13 +29,14 @@ public:
 
 void export_Condition(py::module& m) {
     py::class_<ConditionBase, ConditionPtr, PyConditionBase>(
-      m, "ConditionBase",
+      m, "ConditionBase", py::dynamic_attr(),
       R"(系统有效条件基类自定义系统有效条件接口：
 
     - _calculate : 【必须】子类计算接口
     - _clone : 【必须】克隆接口
     - _reset : 【可选】重载私有变量)")
       .def(py::init<>())
+      .def(py::init<const ConditionBase&>())
       .def(py::init<const string&>(), R"(初始化构造函数
         
     :param str name: 名称)")
@@ -86,7 +88,8 @@ void export_Condition(py::module& m) {
            
     以指标的形式获取实际值，与交易对象等长，0表示无效，1表示系统有效)")
 
-      .def("_add_valid", &ConditionBase::_addValid, R"(_add_valid(self, datetime)
+      .def("_add_valid", &ConditionBase::_addValid, py::arg("datetime"), py::arg("value") = 1.0,
+           R"(_add_valid(self, datetime)
 
     加入有效时间，在_calculate中调用
 
@@ -94,6 +97,33 @@ void export_Condition(py::module& m) {
 
       .def("_calculate", &ConditionBase::_calculate, "【重载接口】子类计算接口")
       .def("_reset", &ConditionBase::_reset, "【重载接口】子类复位接口，复位内部私有变量")
+
+      .def("__len__", &ConditionBase::size)
+
+      .def("__getitem__",
+           [](const ConditionPtr& self, int64_t i) {
+               size_t total = self->size();
+               int64_t pos = i < 0 ? total + i : i;
+               return self->at(pos);
+           })
+
+      .def("__and__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self & other; })
+
+      .def("__or__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self | other; })
+
+      .def("__add__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self + other; })
+
+      .def("__sub__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self - other; })
+
+      .def("__mul__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self * other; })
+
+      .def("__truediv__",
+           [](const ConditionPtr& self, const ConditionPtr& other) { return self / other; })
 
         DEF_PICKLE(ConditionPtr);
 

@@ -15,6 +15,9 @@
 #include "../table/StockWeightTable.h"
 #include "../table/StockTable.h"
 #include "../table/HolidayTable.h"
+#include "../table/ZhBond10Table.h"
+#include "../table/HistoryFinanceTable.h"
+#include "../table/HistoryFinanceFieldTable.h"
 
 namespace hku {
 
@@ -124,21 +127,21 @@ StockWeightList SQLiteBaseInfoDriver::getStockWeightList(const string& market, c
         HKU_CHECK(con, "Failed fetch connect!");
 
         vector<StockWeightTable> table;
+        Datetime new_start = start.isNull() ? Datetime::min() : start;
         Datetime new_end = end.isNull() ? Datetime::max() : end;
         con->batchLoad(
           table,
           format(
             "stockid=(select stockid from stock where marketid=(select marketid from "
             "market where market='{}') and code='{}') and date>={} and date<{} order by date asc",
-            market, code, start.year() * 10000 + start.month() * 100 + start.day(),
-            new_end.year() * 10000 + new_end.month() * 100 + new_end.day()));
+            market, code, new_start.ymd(), new_end.ymd()));
 
         for (auto& w : table) {
             try {
                 result.push_back(StockWeight(Datetime(w.date * 10000), w.countAsGift * 0.0001,
                                              w.countForSell * 0.0001, w.priceForSell * 0.001,
                                              w.bonus * 0.001, w.countOfIncreasement * 0.0001,
-                                             w.totalCount, w.freeCount));
+                                             w.totalCount, w.freeCount, w.suogu));
             } catch (std::out_of_range& e) {
                 HKU_WARN("Date of id({}) is invalid! {}", w.id(), e.what());
             } catch (std::exception& e) {
@@ -171,8 +174,8 @@ unordered_map<string, StockWeightList> SQLiteBaseInfoDriver::getAllStockWeightLi
           "SELECT a.id AS id, (market.market || stock.code) AS market_code, a.date, "
           "a.countAsGift*0.0001 AS countAsGift, a.countForSell*0.0001 AS countForSell, "
           "a.priceForSell*0.001 AS priceForSell, a.bonus*0.001,a.countOfIncreasement*0.0001 AS "
-          "countOfIncreasement, a.totalCount AS totalCount, a.freeCount AS freeCount FROM "
-          "stkweight AS a, stock, market WHERE a.stockid=stock.stockid AND "
+          "countOfIncreasement, a.totalCount AS totalCount, a.freeCount AS freeCount, a.suogu AS "
+          "suogu FROM stkweight AS a, stock, market WHERE a.stockid=stock.stockid AND "
           "market.marketid=stock.marketid ORDER BY a.stockid, a.date");
 
         for (const auto& record : view) {
@@ -183,9 +186,10 @@ unordered_map<string, StockWeightList> SQLiteBaseInfoDriver::getAllStockWeightLi
                     iter = in_iter.first;
                 }
             }
-            iter->second.emplace_back(StockWeight(
-              Datetime(record.date), record.countAsGift, record.countForSell, record.priceForSell,
-              record.bonus, record.countOfIncreasement, record.totalCount, record.freeCount));
+            iter->second.emplace_back(
+              StockWeight(Datetime(record.date), record.countAsGift, record.countForSell,
+                          record.priceForSell, record.bonus, record.countOfIncreasement,
+                          record.totalCount, record.freeCount, record.suogu));
         }
 
     } catch (std::exception& e) {
@@ -325,7 +329,7 @@ std::unordered_set<Datetime> SQLiteBaseInfoDriver::getAllHolidays() {
         auto con = m_pool->getConnect();
         std::vector<HolidayTable> holidays;
         con->batchLoad(holidays);
-        for (auto& holiday : holidays) {
+        for (const auto& holiday : holidays) {
             try {
                 result.insert(holiday.datetime());
             } catch (std::exception& e) {
@@ -336,6 +340,81 @@ std::unordered_set<Datetime> SQLiteBaseInfoDriver::getAllHolidays() {
         }
     } catch (...) {
     }
+    return result;
+}
+
+ZhBond10List SQLiteBaseInfoDriver::getAllZhBond10() {
+    ZhBond10List result;
+    auto con = m_pool->getConnect();
+    try {
+        vector<ZhBond10Table> records;
+        con->batchLoad(records, "1=1 order by date asc");
+        size_t total = records.size();
+        HKU_IF_RETURN(total == 0, result);
+        result.resize(records.size());
+        for (size_t i = 0; i < total; i++) {
+            result[i].date = Datetime(records[i].date);
+            result[i].value = double(records[i].value) * 0.0001;
+        }
+    } catch (...) {
+    }
+    return result;
+}
+
+vector<std::pair<size_t, string>> SQLiteBaseInfoDriver::getHistoryFinanceField() {
+    vector<std::pair<size_t, string>> result;
+    auto con = m_pool->getConnect();
+    try {
+        vector<HistoryFinanceFieldTable> fields;
+        con->batchLoad(fields);
+        size_t total = fields.size();
+        result.resize(total);
+        for (size_t i = 0; i < total; i++) {
+            result[i].first = size_t(fields[i].id());
+            result[i].second = std::move(fields[i].name);
+        }
+
+    } catch (...) {
+    }
+    return result;
+}
+
+vector<HistoryFinanceInfo> SQLiteBaseInfoDriver::getHistoryFinance(const string& market,
+                                                                   const string& code,
+                                                                   Datetime start, Datetime end) {
+    vector<HistoryFinanceInfo> result;
+
+    Datetime new_start = start.isNull() ? Datetime::min() : start;
+    Datetime new_end = end.isNull() ? Datetime::max() : end;
+    HKU_IF_RETURN(start >= end, result);
+
+    auto con = m_pool->getConnect();
+    try {
+        string market_code(fmt::format("{}{}", market, code));
+        to_upper(market_code);
+        vector<HistoryFinanceTable> finances;
+        con->batchLoad(finances, ((Field("market_code") == market_code) &
+                                  (Field("report_date") >= new_start.ymd()) &
+                                  (Field("report_date") < new_end.ymd())) +
+                                   ASC("report_date"));
+        size_t total = finances.size();
+        result.resize(total);
+        for (size_t i = 0; i < total; i++) {
+            auto& finance = finances[i];
+            auto& cur = result[i];
+            cur.fileDate = Datetime(finance.file_date);
+            cur.reportDate = Datetime(finance.report_date);
+            size_t count = finance.values.size() / sizeof(float);
+            cur.values.resize(count);
+            memcpy(cur.values.data(), finance.values.data(), count * sizeof(float));
+        }
+
+    } catch (const std::exception& e) {
+        HKU_ERROR(e.what());
+    } catch (...) {
+        HKU_ERROR_UNKNOWN;
+    }
+
     return result;
 }
 

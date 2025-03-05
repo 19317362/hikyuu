@@ -10,19 +10,52 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/uuid/uuid_generators.hpp>
-#include <httplib.h>
 #include <nlohmann/json.hpp>
 #include "hikyuu/version.h"
 #include "hikyuu/DataType.h"
 #include "hikyuu/utilities/os.h"
-#include "node/NodeClient.h"
+#include "hikyuu/utilities/http_client/HttpClient.h"
 #include "sysinfo.h"
 
 using json = nlohmann::json;
 
+#define FEEDBACK_SERVER_ADDR "http://hikyuu.cpolar.cn"
+
 namespace hku {
 
 std::atomic<int> g_latest_version{0};
+bool g_runningInPython{false};      // 是否是在 python 中运行
+bool g_pythonInInteractive{false};  // python 是否运行在交互模式下
+bool g_pythonInJupyter{false};      // python 是否运行在 Jupyter中
+
+bool HKU_API runningInPython() {
+    return g_runningInPython;
+}
+
+void HKU_API setRunningInPython(bool inpython) {
+    g_runningInPython = inpython;
+}
+
+bool HKU_API pythonInInteractive() {
+    return g_pythonInInteractive;
+}
+
+void HKU_API setPythonInInteractive(bool interactive) {
+    g_pythonInInteractive = interactive;
+}
+
+bool HKU_API pythonInJupyter() {
+    return g_pythonInJupyter;
+}
+
+void HKU_API setPythonInJupyter(bool injupyter) {
+    g_pythonInJupyter = injupyter;
+    if (createDir(fmt::format("{}/.hikyuu", getUserDir()))) {
+        initLogger(injupyter, fmt::format("{}/.hikyuu/hikyuu.log", getUserDir()));
+    } else {
+        initLogger(injupyter);
+    }
+}
 
 bool HKU_API CanUpgrade() {
     int current_version =
@@ -41,17 +74,17 @@ std::string getVersion() {
     return HKU_VERSION;
 }
 
-std::string HKU_API getVersionWithBuild() {
-#if defined(_DEBUG) || defined(DEBUG)
-    return fmt::format("{}_{}_debug_{}_{}", HKU_VERSION, HKU_VERSION_BUILD, getPlatform(),
-                       getCpuArch());
-#else
-    return fmt::format("{}_{}_release_{}_{}", HKU_VERSION, HKU_VERSION_BUILD, getPlatform(),
-                       getCpuArch());
-#endif
+std::string getVersionWithBuild() {
+    return fmt::format("{}_{}_{}_{}_{}", HKU_VERSION, HKU_VERSION_BUILD, HKU_VERSION_MODE,
+                       getPlatform(), getCpuArch());
 }
 
-static bool readUUID(const boost::uuids::uuid& out) {
+std::string getVersionWithGit() {
+    return HKU_VERSION_GIT;
+}
+
+// cppcheck-suppress constParameterReference
+static bool readUUID(boost::uuids::uuid& out) {
     std::string filename = fmt::format("{}/.hikyuu/uid", getUserDir());
     FILE* fp = fopen(filename.c_str(), "rb");
     HKU_IF_RETURN(!fp, false);
@@ -83,27 +116,17 @@ void sendFeedback() {
                 saveUUID(uid);
             }
 
-            NodeClient client("tcp://1.tcp.cpolar.cn:20981");
-            client.dial();
-
-            json req, res;
-            req["cmd"] = 2;
-            client.post(req, res);
-            std::string host = res["host"].get<std::string>();
-            uint64_t port = res["port"].get<uint64_t>();
-            g_latest_version = res.contains("last_version") ? res["last_version"].get<int>() : 0;
-            client.close();
-
-            client.setServerAddr(fmt::format("tcp://{}:{}", host, port));
-            client.dial();
-            req["cmd"] = 1;
+            HttpClient client(FEEDBACK_SERVER_ADDR, 2000);
+            json req;
             req["uid"] = boost::uuids::to_string(uid);
             req["part"] = "hikyuu";
             req["version"] = HKU_VERSION;
             req["build"] = fmt::format("{}", HKU_VERSION_BUILD);
             req["platform"] = getPlatform();
             req["arch"] = getCpuArch();
-            client.post(req, res);
+            auto res = client.post("/hku/visit", req);
+            json r = res.json();
+            g_latest_version = r["data"]["last_version"].get<int>();
 
         } catch (...) {
             // do nothing
@@ -111,6 +134,22 @@ void sendFeedback() {
     });
     t.detach();
     // t.join();
+}
+
+void sendPythonVersionFeedBack(int major, int minor, int micro) {
+    std::thread t([=]() {
+        try {
+            HttpClient client(FEEDBACK_SERVER_ADDR, 2000);
+            json req;
+            req["major"] = major;
+            req["minor"] = minor;
+            req["micro"] = micro;
+            client.post("/hku/pyver", req);
+        } catch (...) {
+            // do nothing
+        }
+    });
+    t.detach();
 }
 
 }  // namespace hku

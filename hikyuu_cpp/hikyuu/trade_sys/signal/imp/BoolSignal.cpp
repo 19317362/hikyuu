@@ -5,7 +5,8 @@
  *      Author: fasiondog
  */
 
-#include "../../../indicator/crt/KDATA.h"
+#include "hikyuu/indicator/crt/ALIGN.h"
+#include "hikyuu/indicator/crt/KDATA.h"
 #include "BoolSignal.h"
 
 #if HKU_SUPPORT_SERIALIZATION
@@ -22,29 +23,34 @@ BoolSignal::BoolSignal(const Indicator& buy, const Indicator& sell)
 BoolSignal::~BoolSignal() {}
 
 SignalPtr BoolSignal::_clone() {
-    BoolSignal* p = new BoolSignal();
-    p->m_bool_buy = m_bool_buy;
-    p->m_bool_sell = m_bool_sell;
-    return SignalPtr(p);
+    auto p = make_shared<BoolSignal>();
+    p->m_bool_buy = m_bool_buy.clone();
+    p->m_bool_sell = m_bool_sell.clone();
+    return p;
 }
 
-void BoolSignal::_calculate() {
-    Indicator buy = m_bool_buy(m_kdata);
-    Indicator sell = m_bool_sell(m_kdata);
+void BoolSignal::_calculate(const KData& kdata) {
+    Indicator buy = ALIGN(m_bool_buy(kdata), kdata);
+    Indicator sell = ALIGN(m_bool_sell(kdata), kdata);
     HKU_ERROR_IF_RETURN(buy.size() != sell.size(), void(), "buy.size() != sell.size()");
 
     size_t discard = buy.discard() > sell.discard() ? buy.discard() : sell.discard();
     size_t total = buy.size();
+    auto const* buydata = buy.data();
+    auto const* selldata = sell.data();
+    auto const* ks = kdata.data();
     for (size_t i = discard; i < total; ++i) {
-        if (buy[i] > 0.0)
-            _addBuySignal(m_kdata[i].datetime);
-        if (sell[i] > 0.0)
-            _addSellSignal(m_kdata[i].datetime);
+        if (buydata[i] > 0.0)
+            _addBuySignal(ks[i].datetime);
+        if (selldata[i] > 0.0)
+            _addSellSignal(ks[i].datetime);
     }
 }
 
-SignalPtr HKU_API SG_Bool(const Indicator& buy, const Indicator& sell) {
-    return SignalPtr(new BoolSignal(buy, sell));
+SignalPtr HKU_API SG_Bool(const Indicator& buy, const Indicator& sell, bool alternate) {
+    auto p = make_shared<BoolSignal>(buy, sell);
+    p->setParam<bool>("alternate", alternate);
+    return p;
 }
 
 } /* namespace hku */

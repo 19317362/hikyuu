@@ -15,11 +15,10 @@ namespace hku {
 class BoolCondition : public ConditionBase {
 public:
     BoolCondition();
-    BoolCondition(const Indicator&);
+    explicit BoolCondition(const Indicator&);
     virtual ~BoolCondition();
 
     virtual void _calculate() override;
-    virtual void _reset() override;
     virtual ConditionPtr _clone() override;
 
 private:

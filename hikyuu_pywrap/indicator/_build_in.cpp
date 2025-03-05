@@ -35,8 +35,24 @@ Indicator (*VOL3)() = VOL;
 Indicator (*KDATA_PART1)(const KData& kdata, const string& part) = KDATA_PART;
 Indicator (*KDATA_PART3)(const string& part) = KDATA_PART;
 
-Indicator (*DATE1)() = DATE;
-Indicator (*DATE2)(const KData&) = DATE;
+Indicator (*RECOVER_FORWARD_1)() = RECOVER_FORWARD;
+Indicator (*RECOVER_FORWARD_2)(const Indicator&) = RECOVER_FORWARD;
+Indicator (*RECOVER_FORWARD_3)(const KData&) = RECOVER_FORWARD;
+
+Indicator (*RECOVER_BACKWARD_1)() = RECOVER_BACKWARD;
+Indicator (*RECOVER_BACKWARD_2)(const Indicator&) = RECOVER_BACKWARD;
+Indicator (*RECOVER_BACKWARD_3)(const KData&) = RECOVER_BACKWARD;
+
+Indicator (*RECOVER_EQUAL_FORWARD_1)() = RECOVER_EQUAL_FORWARD;
+Indicator (*RECOVER_EQUAL_FORWARD_2)(const Indicator&) = RECOVER_EQUAL_FORWARD;
+Indicator (*RECOVER_EQUAL_FORWARD_3)(const KData&) = RECOVER_EQUAL_FORWARD;
+
+Indicator (*RECOVER_EQUAL_BACKWARD_1)() = RECOVER_EQUAL_BACKWARD;
+Indicator (*RECOVER_EQUAL_BACKWARD_2)(const Indicator&) = RECOVER_EQUAL_BACKWARD;
+Indicator (*RECOVER_EQUAL_BACKWARD_3)(const KData&) = RECOVER_EQUAL_BACKWARD;
+
+Indicator (*DATE1)() = hku::DATE;
+Indicator (*DATE2)(const KData&) = hku::DATE;
 
 Indicator (*TIME1)() = TIME;
 Indicator (*TIME2)(const KData&) = TIME;
@@ -66,12 +82,6 @@ Indicator (*AMA_3)(const Indicator&, int, int, int) = AMA;
 Indicator (*AMA_4)(const Indicator&, const IndParam&, const IndParam&, const IndParam&) = AMA;
 Indicator (*AMA_5)(const Indicator&, const Indicator&, const Indicator&, const Indicator&) = AMA;
 
-Indicator (*ATR_1)(int) = ATR;
-Indicator (*ATR_2)(const IndParam&) = ATR;
-Indicator (*ATR_3)(const Indicator&, const IndParam&) = ATR;
-Indicator (*ATR_4)(const Indicator&, const Indicator&) = ATR;
-Indicator (*ATR_5)(const Indicator&, int) = ATR;
-
 Indicator (*DIFF_1)() = DIFF;
 Indicator (*DIFF_2)(const Indicator&) = DIFF;
 
@@ -80,6 +90,12 @@ Indicator (*MA_2)(const IndParam&) = MA;
 Indicator (*MA_3)(const Indicator&, const IndParam&) = MA;
 Indicator (*MA_4)(const Indicator&, const Indicator&) = MA;
 Indicator (*MA_5)(const Indicator&, int) = MA;
+
+Indicator (*WMA_1)(int) = WMA;
+Indicator (*WMA_2)(const IndParam&) = WMA;
+Indicator (*WMA_3)(const Indicator&, const IndParam&) = WMA;
+Indicator (*WMA_4)(const Indicator&, const Indicator&) = WMA;
+Indicator (*WMA_5)(const Indicator&, int) = WMA;
 
 Indicator (*SMA_1)(int, double) = SMA;
 Indicator (*SMA_2)(int, const IndParam&) = SMA;
@@ -161,9 +177,9 @@ Indicator (*HSL_1)() = HSL;
 Indicator (*HSL_2)(const KData&) = HSL;
 
 Indicator (*IF_1)(const Indicator&, const Indicator&, const Indicator&) = IF;
-Indicator (*IF_2)(const Indicator&, price_t, const Indicator&) = IF;
-Indicator (*IF_3)(const Indicator&, const Indicator&, price_t) = IF;
-Indicator (*IF_4)(const Indicator&, price_t, price_t) = IF;
+Indicator (*IF_2)(const Indicator&, Indicator::value_t, const Indicator&) = IF;
+Indicator (*IF_3)(const Indicator&, const Indicator&, Indicator::value_t) = IF;
+Indicator (*IF_4)(const Indicator&, Indicator::value_t, Indicator::value_t) = IF;
 
 Indicator (*COUNT_1)(int) = COUNT;
 Indicator (*COUNT_2)(const IndParam&) = COUNT;
@@ -178,43 +194,43 @@ Indicator (*SUM_4)(const Indicator&, const Indicator&) = SUM;
 Indicator (*SUM_5)(const Indicator&, int) = SUM;
 
 Indicator (*ABS_1)() = ABS;
-Indicator (*ABS_2)(price_t) = ABS;
+Indicator (*ABS_2)(Indicator::value_t) = ABS;
 Indicator (*ABS_3)(const Indicator&) = ABS;
 
 Indicator (*NOT_1)() = NOT;
 Indicator (*NOT_2)(const Indicator&) = NOT;
 
 Indicator (*SGN_1)() = SGN;
-Indicator (*SGN_2)(price_t) = SGN;
+Indicator (*SGN_2)(Indicator::value_t) = SGN;
 Indicator (*SGN_3)(const Indicator&) = SGN;
 
 Indicator (*EXP_1)() = EXP;
-Indicator (*EXP_2)(price_t) = EXP;
+Indicator (*EXP_2)(Indicator::value_t) = EXP;
 Indicator (*EXP_3)(const Indicator&) = EXP;
 
 Indicator (*MAX_1)(const Indicator&, const Indicator&) = MAX;
-Indicator (*MAX_2)(const Indicator&, price_t) = MAX;
-Indicator (*MAX_3)(price_t, const Indicator&) = MAX;
+Indicator (*MAX_2)(const Indicator&, Indicator::value_t) = MAX;
+Indicator (*MAX_3)(Indicator::value_t, const Indicator&) = MAX;
 
 Indicator (*MIN_1)(const Indicator&, const Indicator&) = MIN;
-Indicator (*MIN_2)(const Indicator&, price_t) = MIN;
-Indicator (*MIN_3)(price_t, const Indicator&) = MIN;
+Indicator (*MIN_2)(const Indicator&, Indicator::value_t) = MIN;
+Indicator (*MIN_3)(Indicator::value_t, const Indicator&) = MIN;
 
 Indicator (*BETWEEN_1)(const Indicator&, const Indicator&, const Indicator&) = BETWEEN;
-Indicator (*BETWEEN_2)(const Indicator&, const Indicator&, price_t) = BETWEEN;
-Indicator (*BETWEEN_3)(const Indicator&, price_t, const Indicator&) = BETWEEN;
-Indicator (*BETWEEN_4)(const Indicator&, price_t, price_t) = BETWEEN;
-Indicator (*BETWEEN_5)(price_t, const Indicator&, const Indicator&) = BETWEEN;
-Indicator (*BETWEEN_6)(price_t, const Indicator&, price_t) = BETWEEN;
-Indicator (*BETWEEN_7)(price_t, price_t, const Indicator&) = BETWEEN;
-Indicator (*BETWEEN_8)(price_t, price_t, price_t) = BETWEEN;
+Indicator (*BETWEEN_2)(const Indicator&, const Indicator&, Indicator::value_t) = BETWEEN;
+Indicator (*BETWEEN_3)(const Indicator&, Indicator::value_t, const Indicator&) = BETWEEN;
+Indicator (*BETWEEN_4)(const Indicator&, Indicator::value_t, Indicator::value_t) = BETWEEN;
+Indicator (*BETWEEN_5)(Indicator::value_t, const Indicator&, const Indicator&) = BETWEEN;
+Indicator (*BETWEEN_6)(Indicator::value_t, const Indicator&, Indicator::value_t) = BETWEEN;
+Indicator (*BETWEEN_7)(Indicator::value_t, Indicator::value_t, const Indicator&) = BETWEEN;
+Indicator (*BETWEEN_8)(Indicator::value_t, Indicator::value_t, Indicator::value_t) = BETWEEN;
 
 Indicator (*LN_1)() = LN;
-Indicator (*LN_2)(price_t) = LN;
+Indicator (*LN_2)(Indicator::value_t) = LN;
 Indicator (*LN_3)(const Indicator&) = LN;
 
 Indicator (*LOG_1)() = LOG;
-Indicator (*LOG_2)(price_t) = LOG;
+Indicator (*LOG_2)(Indicator::value_t) = LOG;
 Indicator (*LOG_3)(const Indicator&) = LOG;
 
 Indicator (*HHVBARS_1)(int) = HHVBARS;
@@ -234,35 +250,35 @@ Indicator (*POW_2)(const IndParam&) = POW;
 Indicator (*POW_3)(const Indicator&, int) = POW;
 Indicator (*POW_4)(const Indicator&, const IndParam&) = POW;
 Indicator (*POW_5)(const Indicator&, const Indicator&) = POW;
-Indicator (*POW_6)(price_t, int) = POW;
+Indicator (*POW_6)(Indicator::value_t, int) = POW;
 
 Indicator (*SQRT_1)() = SQRT;
 Indicator (*SQRT_2)(const Indicator&) = SQRT;
-Indicator (*SQRT_3)(price_t) = SQRT;
+Indicator (*SQRT_3)(Indicator::value_t) = SQRT;
 
 Indicator (*ROUND_1)(int) = ROUND;
 Indicator (*ROUND_2)(const Indicator&, int) = ROUND;
-Indicator (*ROUND_3)(price_t, int) = ROUND;
+Indicator (*ROUND_3)(Indicator::value_t, int) = ROUND;
 
 Indicator (*ROUNDUP_1)(int) = ROUNDUP;
 Indicator (*ROUNDUP_2)(const Indicator&, int) = ROUNDUP;
-Indicator (*ROUNDUP_3)(price_t, int) = ROUNDUP;
+Indicator (*ROUNDUP_3)(Indicator::value_t, int) = ROUNDUP;
 
 Indicator (*ROUNDDOWN_1)(int) = ROUNDDOWN;
 Indicator (*ROUNDDOWN_2)(const Indicator&, int) = ROUNDDOWN;
-Indicator (*ROUNDDOWN_3)(price_t, int) = ROUNDDOWN;
+Indicator (*ROUNDDOWN_3)(Indicator::value_t, int) = ROUNDDOWN;
 
 Indicator (*FLOOR_1)() = FLOOR;
 Indicator (*FLOOR_2)(const Indicator&) = FLOOR;
-Indicator (*FLOOR_3)(price_t) = FLOOR;
+Indicator (*FLOOR_3)(Indicator::value_t) = FLOOR;
 
 Indicator (*CEILING_1)() = CEILING;
 Indicator (*CEILING_2)(const Indicator&) = CEILING;
-Indicator (*CEILING_3)(price_t) = CEILING;
+Indicator (*CEILING_3)(Indicator::value_t) = CEILING;
 
 Indicator (*INTPART_1)() = INTPART;
 Indicator (*INTPART_2)(const Indicator&) = INTPART;
-Indicator (*INTPART_3)(price_t) = INTPART;
+Indicator (*INTPART_3)(Indicator::value_t) = INTPART;
 
 Indicator (*EXIST_1)(int) = EXIST;
 Indicator (*EXIST_2)(const IndParam&) = EXIST;
@@ -290,36 +306,36 @@ Indicator (*LAST_11)(const Indicator&, const Indicator&, const Indicator&) = LAS
 
 Indicator (*SIN_1)() = SIN;
 Indicator (*SIN_2)(const Indicator&) = SIN;
-Indicator (*SIN_3)(price_t) = SIN;
+Indicator (*SIN_3)(Indicator::value_t) = SIN;
 
 Indicator (*ASIN_1)() = ASIN;
 Indicator (*ASIN_2)(const Indicator&) = ASIN;
-Indicator (*ASIN_3)(price_t) = ASIN;
+Indicator (*ASIN_3)(Indicator::value_t) = ASIN;
 
 Indicator (*COS_1)() = COS;
 Indicator (*COS_2)(const Indicator&) = COS;
-Indicator (*COS_3)(price_t) = COS;
+Indicator (*COS_3)(Indicator::value_t) = COS;
 
 Indicator (*ACOS_1)() = ACOS;
 Indicator (*ACOS_2)(const Indicator&) = ACOS;
-Indicator (*ACOS_3)(price_t) = ACOS;
+Indicator (*ACOS_3)(Indicator::value_t) = ACOS;
 
 Indicator (*TAN_1)() = TAN;
 Indicator (*TAN_2)(const Indicator&) = TAN;
-Indicator (*TAN_3)(price_t) = TAN;
+Indicator (*TAN_3)(Indicator::value_t) = TAN;
 
 Indicator (*ATAN_1)() = ATAN;
 Indicator (*ATAN_2)(const Indicator&) = ATAN;
-Indicator (*ATAN_3)(price_t) = ATAN;
+Indicator (*ATAN_3)(Indicator::value_t) = ATAN;
 
 Indicator (*REVERSE_1)() = REVERSE;
 Indicator (*REVERSE_2)(const Indicator&) = REVERSE;
-Indicator (*REVERSE_3)(price_t) = REVERSE;
+Indicator (*REVERSE_3)(Indicator::value_t) = REVERSE;
 
 Indicator (*MOD_1)(const Indicator&, const Indicator&) = MOD;
-Indicator (*MOD_2)(const Indicator&, price_t) = MOD;
-Indicator (*MOD_3)(price_t, const Indicator&) = MOD;
-Indicator (*MOD_4)(price_t, price_t) = MOD;
+Indicator (*MOD_2)(const Indicator&, Indicator::value_t) = MOD;
+Indicator (*MOD_3)(Indicator::value_t, const Indicator&) = MOD;
+Indicator (*MOD_4)(Indicator::value_t, Indicator::value_t) = MOD;
 
 Indicator (*VAR_1)(int) = VAR;
 Indicator (*VAR_2)(const IndParam&) = VAR;
@@ -334,18 +350,18 @@ Indicator (*VARP_4)(const Indicator&, const Indicator&) = VARP;
 Indicator (*VARP_5)(const Indicator&, int) = VARP;
 
 Indicator (*CROSS_1)(const Indicator&, const Indicator&) = CROSS;
-Indicator (*CROSS_2)(const Indicator&, price_t) = CROSS;
-Indicator (*CROSS_3)(price_t, const Indicator&) = CROSS;
-Indicator (*CROSS_4)(price_t, price_t) = CROSS;
+Indicator (*CROSS_2)(const Indicator&, Indicator::value_t) = CROSS;
+Indicator (*CROSS_3)(Indicator::value_t, const Indicator&) = CROSS;
+Indicator (*CROSS_4)(Indicator::value_t, Indicator::value_t) = CROSS;
 
 Indicator (*LONGCROSS_1)(const Indicator&, const Indicator&, int) = LONGCROSS;
 Indicator (*LONGCROSS_2)(const Indicator&, const Indicator&, const Indicator&) = LONGCROSS;
-Indicator (*LONGCROSS_3)(const Indicator&, price_t, int) = LONGCROSS;
-Indicator (*LONGCROSS_4)(const Indicator&, price_t, const Indicator&) = LONGCROSS;
-Indicator (*LONGCROSS_5)(price_t, const Indicator&, int) = LONGCROSS;
-Indicator (*LONGCROSS_6)(price_t, const Indicator&, const Indicator&) = LONGCROSS;
-Indicator (*LONGCROSS_7)(price_t, price_t, int) = LONGCROSS;
-Indicator (*LONGCROSS_8)(price_t, price_t, const Indicator&) = LONGCROSS;
+Indicator (*LONGCROSS_3)(const Indicator&, Indicator::value_t, int) = LONGCROSS;
+Indicator (*LONGCROSS_4)(const Indicator&, Indicator::value_t, const Indicator&) = LONGCROSS;
+Indicator (*LONGCROSS_5)(Indicator::value_t, const Indicator&, int) = LONGCROSS;
+Indicator (*LONGCROSS_6)(Indicator::value_t, const Indicator&, const Indicator&) = LONGCROSS;
+Indicator (*LONGCROSS_7)(Indicator::value_t, Indicator::value_t, int) = LONGCROSS;
+Indicator (*LONGCROSS_8)(Indicator::value_t, Indicator::value_t, const Indicator&) = LONGCROSS;
 
 Indicator (*FILTER_1)(int) = FILTER;
 Indicator (*FILTER_2)(const IndParam&) = FILTER;
@@ -355,11 +371,11 @@ Indicator (*FILTER_5)(const Indicator&, int) = FILTER;
 
 Indicator (*BARSSINCE_1)() = BARSSINCE;
 Indicator (*BARSSINCE_2)(const Indicator&) = BARSSINCE;
-Indicator (*BARSSINCE_3)(price_t) = BARSSINCE;
+Indicator (*BARSSINCE_3)(Indicator::value_t) = BARSSINCE;
 
 Indicator (*BARSLAST_1)() = BARSLAST;
 Indicator (*BARSLAST_2)(const Indicator&) = BARSLAST;
-Indicator (*BARSLAST_3)(price_t) = BARSLAST;
+Indicator (*BARSLAST_3)(Indicator::value_t) = BARSLAST;
 
 Indicator (*SUMBARS_1)(double) = SUMBARS;
 Indicator (*SUMBARS_2)(const IndParam&) = SUMBARS;
@@ -418,10 +434,10 @@ Indicator (*AD_2)(const KData&) = AD;
 Indicator (*COST_1)(double x) = COST;
 Indicator (*COST_2)(const KData&, double x) = COST;
 
-Indicator (*ALIGN_1)(const DatetimeList&) = ALIGN;
-Indicator (*ALIGN_2)(const Indicator&, const DatetimeList&) = ALIGN;
-Indicator (*ALIGN_3)(const Indicator&, const Indicator&) = ALIGN;
-Indicator (*ALIGN_4)(const Indicator&, const KData&) = ALIGN;
+Indicator (*ALIGN_1)(const DatetimeList&, bool fill_null) = ALIGN;
+Indicator (*ALIGN_2)(const Indicator&, const DatetimeList&, bool fill_null) = ALIGN;
+Indicator (*ALIGN_3)(const Indicator&, const Indicator&, bool fill_null) = ALIGN;
+Indicator (*ALIGN_4)(const Indicator&, const KData&, bool fill_null) = ALIGN;
 
 Indicator (*DROPNA_1)() = DROPNA;
 Indicator (*DROPNA_2)(const Indicator&) = DROPNA;
@@ -461,57 +477,71 @@ Indicator (*MDD_2)(const Indicator&) = MDD;
 Indicator (*MRR_1)() = MRR;
 Indicator (*MRR_2)(const Indicator&) = MRR;
 
+Indicator (*ZHBOND10_1)(double) = ZHBOND10;
+Indicator (*ZHBOND10_2)(const DatetimeList&, double) = ZHBOND10;
+Indicator (*ZHBOND10_3)(const KData& k, double) = ZHBOND10;
+Indicator (*ZHBOND10_4)(const Indicator&, double) = ZHBOND10;
+
+Indicator (*CORR_1)(const Indicator&, int, bool) = CORR;
+Indicator (*CORR_2)(const Indicator&, const Indicator&, int, bool) = CORR;
+
+Indicator (*SPEARMAN_1)(const Indicator&, int, bool) = SPEARMAN;
+Indicator (*SPEARMAN_2)(const Indicator&, const Indicator&, int, bool) = SPEARMAN;
+
+Indicator (*ZSCORE_1)(bool, double, bool) = ZSCORE;
+Indicator (*ZSCORE_2)(const Indicator&, bool, double, bool) = ZSCORE;
+
 void export_Indicator_build_in(py::module& m) {
-    m.def("KDATA", KDATA1);
-    m.def("KDATA", KDATA3, R"(KDATA([data])
+    m.def("C_KDATA", KDATA1);
+    m.def("C_KDATA", KDATA3, R"(KDATA([data])
 
     包装KData成Indicator，用于其他指标计算
 
     :param data: KData 或 具有6个返回结果的Indicator（如KDATA生成的Indicator）
     :rtype: Indicator)");
 
-    m.def("CLOSE", CLOSE1);
-    m.def("CLOSE", CLOSE3, R"(CLOSE([data])
+    m.def("C_CLOSE", CLOSE1);
+    m.def("C_CLOSE", CLOSE3, R"(CLOSE([data])
 
     获取收盘价，包装KData的收盘价成Indicator
 
     :param data: 输入数据（KData 或 Indicator）
     :rtype: Indicator)");
 
-    m.def("OPEN", OPEN1);
-    m.def("OPEN", OPEN3, R"(OPEN([data])
+    m.def("C_OPEN", OPEN1);
+    m.def("C_OPEN", OPEN3, R"(OPEN([data])
 
     获取开盘价，包装KData的开盘价成Indicator
 
     :param data: 输入数据（KData 或 Indicator） 
     :rtype: Indicator)");
 
-    m.def("HIGH", HIGH1);
-    m.def("HIGH", HIGH3, R"(HIGH([data])
+    m.def("C_HIGH", HIGH1);
+    m.def("C_HIGH", HIGH3, R"(HIGH([data])
 
     获取最高价，包装KData的最高价成Indicator
 
     :param data: 输入数据（KData 或 Indicator） 
     :rtype: Indicator)");
 
-    m.def("LOW", LOW1);
-    m.def("LOW", LOW3, R"(LOW([data])
+    m.def("C_LOW", LOW1);
+    m.def("C_LOW", LOW3, R"(LOW([data])
 
     获取最低价，包装KData的最低价成Indicator
 
     :param data: 输入数据（KData 或 Indicator） 
     :rtype: Indicator)");
 
-    m.def("AMO", AMO1);
-    m.def("AMO", AMO3, R"(AMO([data])
+    m.def("C_AMO", AMO1);
+    m.def("C_AMO", AMO3, R"(AMO([data])
 
     获取成交金额，包装KData的成交金额成Indicator
     
     :param data: 输入数据（KData 或 Indicator）
     :rtype: Indicator)");
 
-    m.def("VOL", VOL1);
-    m.def("VOL", VOL3, R"(VOL([data])
+    m.def("C_VOL", VOL1);
+    m.def("C_VOL", VOL3, R"(VOL([data])
 
     获取成交量，包装KData的成交量成Indicator
 
@@ -525,6 +555,42 @@ void export_Indicator_build_in(py::module& m) {
 
     :param data: 输入数据（KData 或 Indicator） 
     :param string kpart: KDATA|OPEN|HIGH|LOW|CLOSE|AMO|VOL
+    :rtype: Indicator)");
+
+    m.def("RECOVER_FORWARD", RECOVER_FORWARD_1);
+    m.def("RECOVER_FORWARD", RECOVER_FORWARD_2);
+    m.def("RECOVER_FORWARD", RECOVER_FORWARD_3, R"(RECOVER_FORWARD([data])
+    
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行前向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator)");
+
+    m.def("RECOVER_BACKWARD", RECOVER_BACKWARD_1);
+    m.def("RECOVER_BACKWARD", RECOVER_BACKWARD_2);
+    m.def("RECOVER_BACKWARD", RECOVER_BACKWARD_3, R"(RECOVER_BACKWARD([data])
+    
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行后向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator)");
+
+    m.def("RECOVER_EQUAL_FORWARD", RECOVER_EQUAL_FORWARD_1);
+    m.def("RECOVER_EQUAL_FORWARD", RECOVER_EQUAL_FORWARD_2);
+    m.def("RECOVER_EQUAL_FORWARD", RECOVER_EQUAL_FORWARD_3, R"(RECOVER_EQUAL_FORWARD([data])
+    
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行等比前向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
+    :rtype: Indicator)");
+
+    m.def("RECOVER_EQUAL_BACKWARD", RECOVER_EQUAL_BACKWARD_1);
+    m.def("RECOVER_EQUAL_BACKWARD", RECOVER_EQUAL_BACKWARD_2);
+    m.def("RECOVER_EQUAL_BACKWARD", RECOVER_EQUAL_BACKWARD_3, R"(RECOVER_EQUAL_BACKWARD([data])
+    
+    对输入的指标数据 (CLOSE|OPEN|HIGH|LOW) 进行等比后向复权
+
+    :param Indicator|KData data: 只接受 CLOSE|OPEN|HIGH|LOW 指标，或 KData（此时默认使用 KData 的收盘价）
     :rtype: Indicator)");
 
     m.def("DATE", DATE1);
@@ -591,19 +657,51 @@ void export_Indicator_build_in(py::module& m) {
     :param data: 输入数据 KData
     :rtype: Indicator)");
 
+    m.def("CONTEXT", py::overload_cast<bool>(hku::CONTEXT), py::arg("fill_null") = true);
+    m.def("CONTEXT", py::overload_cast<const Indicator&, bool>(hku::CONTEXT), py::arg("ind"),
+          py::arg("fill_null") = true, R"(CONTEXT(ind)
+    
+    独立上下文。使用 ind 自带的上下文。当指定新的上下文时，不会改变已有的上下文。
+    例如：ind = CLOSE(k1), 当指定新的上下文 ind = ind(k2) 时，使用的是 k2 的收盘价。如想仍使用 k1 收盘价，
+    则需使用 ind = CONTEXT(CLOSE(k1)), 此时 ind(k2) 将仍旧使用 k1 的收盘价。
+    
+    :param Indicator ind: 指标对象
+    :param bool fill_null: 日期对齐时，缺失日期对应填充空值
+    :rtype: Indicator)");
+
+    m.def("CONTEXT_K", CONTEXT_K, R"(CONTEXT_K(ind)
+
+    获取指标上下文。Indicator::getContext()方法获取的是当前的上下文，但对于 CONTEXT 独立上下文指标无法获取其指定的独立上下文，需用此方法获取
+
+    :param Indicator ind: 指标对象
+    :rtype: KData)");
+
     m.def(
       "PRICELIST",
-      [](const py::object& obj, int result_index = 0, int discard = 0) {
+      [](const py::object& obj, int result_index = 0, int discard = 0,
+         const py::object& pyalign_dates = py::none()) {
           if (py::isinstance<Indicator>(obj)) {
               Indicator data = obj.cast<Indicator>();
               return PRICELIST(data, result_index);
           } else if (py::isinstance<py::sequence>(obj)) {
               const auto& x = obj.cast<py::sequence>();
-              return PRICELIST(python_list_to_vector<price_t>(x), discard);
+              auto values = python_list_to_vector<price_t>(x);
+              if (pyalign_dates.is_none()) {
+                  return PRICELIST(values, discard);
+              } else {
+                  py::sequence align_dates = pyalign_dates.cast<py::sequence>();
+                  auto total = len(align_dates);
+                  DatetimeList dates(total);
+                  for (auto i = 0; i < total; ++i) {
+                      dates[i] = pydatetime_to_Datetime(align_dates[i]);
+                  }
+                  return PRICELIST(values, dates, discard);
+              }
           }
           HKU_THROW("Invalid input data type!");
       },
-      py::arg("data"), py::arg("result_index") = 0, py::arg("discard") = 0);
+      py::arg("data"), py::arg("result_index") = 0, py::arg("discard") = 0,
+      py::arg("align_dates") = py::none());
 
     m.def("SMA", SMA_1, py::arg("n") = 22, py::arg("m") = 2.0);
     m.def("SMA", SMA_2, py::arg("n"), py::arg("m"));
@@ -650,6 +748,18 @@ void export_Indicator_build_in(py::module& m) {
     :param int|Indicator|IndParam n: 时间窗口
     :rtype: Indicator)");
 
+    m.def("WMA", WMA_1, py::arg("n") = 22);
+    m.def("WMA", WMA_2, py::arg("n"));
+    m.def("WMA", WMA_3, py::arg("data"), py::arg("n"));
+    m.def("WMA", WMA_4, py::arg("data"), py::arg("n"));
+    m.def("WMA", WMA_5, py::arg("data"), py::arg("n") = 22, R"(WMA([data, n=22])
+
+    加权移动平均，算法:Yn=(1*X1+2*X2+...+n*Xn)/(1+2+...+n)
+
+    :param Indicator data: 输入数据
+    :param int|Indicator|IndParam n: 时间窗口
+    :rtype: Indicator)");
+
     m.def("AMA", AMA_1, py::arg("n") = 10, py::arg("fast_n") = 2, py::arg("slow_n") = 30);
     m.def("AMA", AMA_2, py::arg("n"), py::arg("fast_n"), py::arg("slow_n"));
     m.def("AMA", AMA_4, py::arg("data"), py::arg("n"), py::arg("fast_n"), py::arg("slow_n"));
@@ -669,16 +779,14 @@ void export_Indicator_build_in(py::module& m) {
     * result(0): AMA
     * result(1): ER)");
 
-    m.def("ATR", ATR_1, py::arg("n") = 14);
-    m.def("ATR", ATR_2, py::arg("n"));
-    m.def("ATR", ATR_3, py::arg("data"), py::arg("n"));
-    m.def("ATR", ATR_4, py::arg("data"), py::arg("n"));
-    m.def("ATR", ATR_5, py::arg("data"), py::arg("n") = 14, R"(ATR([data, n=14])
+    m.def("ATR", py::overload_cast<int>(ATR), py::arg("n") = 14);
+    m.def("ATR", py::overload_cast<const KData&, int>(ATR), py::arg("kdata"), py::arg("n") = 14,
+          R"(ATR([kdata, n=14])
 
-    平均真实波幅(Average True Range)
+    平均真实波幅(Average True Range), 真实波动幅度 TR 的简单移动均值
 
-    :param Indicator data 待计算的源数据
-    :param int|Indicator|IndParam n: 计算均值的周期窗口，必须为大于1的整数
+    :param KData kdata 待计算的源数据
+    :param int n: 计算均值的周期窗口，必须为大于1的整数
     :rtype: Indicator)");
 
     m.def("MACD", MACD_1, py::arg("n1") = 12, py::arg("n2") = 26, py::arg("n3") = 9);
@@ -826,29 +934,71 @@ void export_Indicator_build_in(py::module& m) {
    :param KData kdata: k线数据
    :rtype: Indicator)");
 
+    m.def("ZONGGUBEN", py::overload_cast<>(ZONGGUBEN));
+    m.def("ZONGGUBEN", py::overload_cast<const KData&>(ZONGGUBEN), R"(ZONGGUBEN(kdata)
+
+   获取总股本（单位：万股）
+
+   :param KData kdata: k线数据
+   :rtype: Indicator)");
+
     m.def("HSL", HSL_1);
     m.def("HSL", HSL_2, R"(HSL(kdata)
 
-    获取换手率，等于 VOL(k) / CAPITAL(k)
+    获取换手率, 乘以 100 才是百分比，等于 VOL(k) / CAPITAL(k) * 0.01
 
     :param KData kdata: k线数据
     :rtype: Indicator)");
 
-    m.def("WEAVE", WEAVE, R"(WEAVE(ind1, ind2)
+    m.def("WEAVE", [](const py::sequence& seq) {
+        size_t total = len(seq);
+        HKU_CHECK(total >= 2 && total <= 6, "WEAVE: total must be 2 to 6");
+        Indicator ind1 = seq[0].cast<Indicator>();
+        Indicator ind2 = seq[1].cast<Indicator>();
+        Indicator tmp = WEAVE(ind1, ind2);
+        for (size_t i = 2; i < total; i++) {
+            tmp = WEAVE(tmp, seq[i].cast<Indicator>());
+        }
+        return tmp;
+    });
+    m.def("WEAVE", [](const Indicator& ind1, const Indicator& ind2) { return WEAVE(ind1, ind2); });
+    m.def("WEAVE", [](const Indicator& ind1, const Indicator& ind2, const Indicator& ind3) {
+        return WEAVE(ind1, ind2, ind3);
+    });
+    m.def("WEAVE", [](const Indicator& ind1, const Indicator& ind2, const Indicator& ind3,
+                      const Indicator& ind4) { return WEAVE(ind1, ind2, ind3, ind4); });
+    m.def("WEAVE", [](const Indicator& ind1, const Indicator& ind2, const Indicator& ind3,
+                      const Indicator& ind4,
+                      const Indicator& ind5) { return WEAVE(ind1, ind2, ind3, ind4, ind5); });
+    m.def(
+      "WEAVE",
+      [](const Indicator& ind1, const Indicator& ind2, const Indicator& ind3, const Indicator& ind4,
+         const Indicator& ind5,
+         const Indicator& ind6) { return WEAVE(ind1, ind2, ind3, ind4, ind5, ind6); },
+      R"(WEAVE(ind1, ind2[, ind3, ind4, ind5, ind6])
 
-    将ind1和ind2的结果组合在一起放在一个Indicator中。如ind = WEAVE(ind1, ind2), 则此时ind包含多个结果，按ind1、ind2的顺序存放。
+    将最多6个Indicator的结果组合在一起放在一个Indicator中。如ind = WEAVE(ind1, ind2), 则此时ind包含多个结果，按ind1、ind2的顺序存放。
     
     :param Indicator ind1: 指标1
     :param Indicator ind2: 指标2
+    :param Indicator ind3: 指标3, 可省略
+    :param Indicator ind4: 指标4, 可省略
+    :param Indicator ind5: 指标5, 可省略
+    :param Indicator ind6: 指标6, 可省略
     :rtype: Indicator)");
 
-    m.def("CORR", CORR, R"(CORR(ind1, ind2, n)
+    m.def("CORR", CORR_1, py::arg("ref_ind"), py::arg("n") = 10, py::arg("fill_null") = true);
+    m.def("CORR", CORR_2, py::arg("ind"), py::arg("ref_ind"), py::arg("n") = 10,
+          py::arg("fill_null") = true,
+          R"(CORR(ind, ref_ind[, n=10, fill_null=True])
 
-    计算 ind1 和 ind2 的相关系数。返回中存在两个结果，第一个为相关系数，第二个为协方差。
+    计算 ind 和 ref_ind 的相关系数。返回中存在两个结果，第一个为相关系数，第二个为协方差。
+    与 CORR(ref_ind, n)(ind) 等效。
 
-    :param Indicator ind1: 指标1
-    :param Indicator ind2: 指标2
-    :param int n: 按指定 n 的长度计算两个 ind 直接数据相关系数
+    :param Indicator ind: 指标1
+    :param Indicator ref_ind: 指标2
+    :param int n: 按指定 n 的长度计算两个 ind 直接数据相关系数。如果为0，使用输入的ind长度。
+    :param bool fill_null: 日期对齐时缺失日期填充nan值
     :rtype: Indicator)");
 
     m.def("IF", IF_1);
@@ -1435,7 +1585,8 @@ void export_Indicator_build_in(py::module& m) {
     :param KData k: 上下文
     :rtype: Indicator)");
 
-    m.def("DMA", DMA, R"(DMA(ind, a)
+    m.def("DMA", DMA, py::arg("x"), py::arg("a"), py::arg("fill_null") = true,
+          R"(DMA(ind, a[, fill_null=True])
 
     动态移动平均
 
@@ -1447,6 +1598,7 @@ void export_Indicator_build_in(py::module& m) {
 
     :param Indicator ind: 输入数据
     :param Indicator a: 动态系数
+    :param bool fill_null: 日期对齐时缺失数据填充 nan 值。
     :rtype: Indicator)");
 
     m.def("AVEDEV", AVEDEV_1, py::arg("data"), py::arg("n") = 22);
@@ -1530,25 +1682,25 @@ void export_Indicator_build_in(py::module& m) {
     m.def("COST", COST_1, py::arg("x") = 10.0);
     m.def("COST", COST_2, py::arg("k"), py::arg("x") = 10.0, R"(COST(k[, x=10.0])
 
-    成本分布
-
+    成本分布。该函数仅对日线分析周期有效，对不能存在流通盘权息数据的指数、ETF等无效。
     用法：COST(k, X) 表示X%获利盘的价格是多少
-
-    例如：COST(k, 10),表示10%获利盘的价格是多少，即有10%的持仓量在该价格以下，其余90%在该价格以上，为套牢盘 该函数仅对日线分析周期有效
+    例如：COST(k, 10),表示10%获利盘的价格是多少，即有10%的持仓量在该价格以下，其余90%在该价格以上，为套牢盘
 
     :param KData k: 关联的K线数据
     :param float x: x%获利价格, 0~100
     :rtype: Indicator)");
 
-    m.def("ALIGN", ALIGN_1);
-    m.def("ALIGN", ALIGN_2);
-    m.def("ALIGN", ALIGN_3);
-    m.def("ALIGN", ALIGN_4, R"(ALIGN(data, ref):
+    m.def("ALIGN", ALIGN_1, py::arg("ref"), py::arg("fill_null") = true);
+    m.def("ALIGN", ALIGN_2, py::arg("data"), py::arg("ref"), py::arg("fill_null") = true);
+    m.def("ALIGN", ALIGN_3, py::arg("data"), py::arg("ref"), py::arg("fill_null") = true);
+    m.def("ALIGN", ALIGN_4, py::arg("data"), py::arg("ref"), py::arg("fill_null") = true,
+          R"(ALIGN(data, ref):
 
     按指定的参考日期对齐
 
     :param Indicator data: 输入数据
-    :param ref: 指定做为日期参考的 DatetimeList、Indicator 或 KData
+    :param DatetimeList|Indicator|KData ref: 指定做为日期参考的 DatetimeList、Indicator 或 KData
+    :param bool fill_null: 缺失数据使用 nan 填充; 否则使用小于对应日期且最接近对应日期的数据
     :retype: Indicator)");
 
     m.def("DROPNA", DROPNA_1);
@@ -1561,6 +1713,7 @@ void export_Indicator_build_in(py::module& m) {
 
     m.def("ADVANCE", ADVANCE, py::arg("query") = KQueryByIndex(-100), py::arg("market") = "SH",
           py::arg("stk_type") = STOCKTYPE_A, py::arg("ignore_context") = false,
+          py::arg("fill_null") = true,
           R"(ADVANCE([query=Query(-100), market='SH', stk_type='constant.STOCKTYPE_A'])
 
     上涨家数。当存在指定上下文且 ignore_context 为 false 时，将忽略 query, market, stk_type 参数。
@@ -1569,10 +1722,12 @@ void export_Indicator_build_in(py::module& m) {
     :param str market: 所属市场，等于 "" 时，获取所有市场
     :param int stk_type: 证券类型, 大于 constant.STOCKTYPE_TMP 时，获取所有类型证券
     :param bool ignore_context: 是否忽略上下文。忽略时，强制使用 query, market, stk_type 参数。
+    :para. bool fill_null: 缺失数据使用 nan 填充; 否则使用小于对应日期且最接近对应日期的数据
     :rtype: Indicator)");
 
     m.def("DECLINE", DECLINE, py::arg("query") = KQueryByIndex(-100), py::arg("market") = "SH",
           py::arg("stk_type") = STOCKTYPE_A, py::arg("ignore_context") = false,
+          py::arg("fill_null") = true,
           R"(DECLINE([query=Query(-100), market='SH', stk_type='constant.STOCKTYPE_A'])
 
     下跌家数。当存在指定上下文且 ignore_context 为 false 时，将忽略 query, market, stk_type 参数。
@@ -1581,6 +1736,7 @@ void export_Indicator_build_in(py::module& m) {
     :param str market: 所属市场，等于 "" 时，获取所有市场
     :param int stk_type: 证券类型, 大于 constant.STOCKTYPE_TMP 时，获取所有类型证券
     :param bool ignore_context: 是否忽略上下文。忽略时，强制使用 query, market, stk_type 参数。
+    :param bool fill_null: 缺失数据使用 nan 填充; 否则使用小于对应日期且最接近对应日期的数据
     :rtype: Indicator)");
 
     m.def("SLICE", SLICE_1, py::arg("data"), py::arg("start"), py::arg("end"));
@@ -1626,4 +1782,426 @@ void export_Indicator_build_in(py::module& m) {
     m.def("MRR", MRR_2, R"(MRR([data])
     
     当前价格相对历史最低值的盈利百分比，可用于计算历史最高盈利比例)");
+
+    m.def("ZHBOND10", ZHBOND10_1, py::arg("default_val") = 0.4);
+    m.def("ZHBOND10", ZHBOND10_2, py::arg("data"), py::arg("default_val") = 0.4);
+    m.def("ZHBOND10", ZHBOND10_3, py::arg("data"), py::arg("default_val") = 0.4);
+    m.def("ZHBOND10", ZHBOND10_4, py::arg("data"), py::arg("default_val") = 0.4,
+          R"(ZHBOND10([data, defaut_val])
+
+    获取10年期中国国债收益率
+
+    :param DatetimeList|KDate|Indicator data: 输入的日期参考，优先使用上下文中的日期
+    :param float default_val: 如果输入的日期早于已有国债数据的最早记录，则使用此默认值)");
+
+    m.def("SPEARMAN", SPEARMAN_1, py::arg("ref_ind"), py::arg("n") = 0,
+          py::arg("fill_null") = true);
+    m.def("SPEARMAN", SPEARMAN_2, py::arg("ind"), py::arg("ref_ind"), py::arg("n") = 0,
+          py::arg("fill_null") = true,
+          R"(SPEARMAN(ind, ref_ind[, n=0, fill_null=True])
+
+    Spearman 相关系数。与 SPEARMAN(ref_ind, n)(ind) 等效。
+
+    :param Indicator ind: 输入参数1
+    :param Indicator ref_ind: 输入参数2
+    :param int n: 滚动窗口(大于2 或 等于0)，等于0时，代表 n 实际使用 ind 的长度
+    :param bool fill_null: 缺失数据使用 nan 填充; 否则使用小于对应日期且最接近对应日期的数据)");
+
+    // IR(const Indicator& p, const Indicator& b, int n = 100)
+    m.def("IR", IR, py::arg("p"), py::arg("b"), py::arg("n") = 100, R"(IR(p, b[, n])
+
+    信息比率（Information Ratio，IR）
+
+    公式: (P-B) / TE
+    P: 组合收益率
+    B: 比较基准收益率
+    TE: 投资周期中每天的 p 和 b 之间的标准差
+    实际使用时，P 一般为 TM 的资产曲线，B 为沪深 3000 收盘价，如:
+    ref_k = sm["sh000300"].get_kdata(query)
+    funds = my_tm.get_funds_curve(ref_k.get_datetime.list())
+    ir = IR(PRICELIST(funds), ref_k.close, 0)
+
+    :param Indicator p:
+    :param Indicator b:
+    :param int n: 时间窗口，如果只想使用最后的值，可以使用 0, 或 len(p),len(b) 指定
+    )");
+
+    m.def(
+      "IC",
+      [](const Indicator& ind, const py::object& stks, const KQuery& query, const Stock& ref_stk,
+         int n, bool spearman) {
+          if (py::isinstance<Block>(stks)) {
+              const auto& blk = stks.cast<Block&>();
+              return IC(ind, blk, query, ref_stk, n, spearman);
+          }
+
+          if (py::isinstance<py::sequence>(stks)) {
+              StockList c_stks = python_list_to_vector<Stock>(stks);
+              return IC(ind, c_stks, query, ref_stk, n, spearman);
+          }
+
+          HKU_THROW("Input stks must be Block or sequenc(Stock)!");
+      },
+      py::arg("ind"), py::arg("stks"), py::arg("query"), py::arg("ref_stk"), py::arg("n") = 1,
+      py::arg("spearman") = true,
+      R"(IC(ind, stks, query, ref_stk[, n=1])
+
+    计算指定的因子相对于参考证券的 IC （实际为 RankIC）
+    
+    :param Indicator ind: 输入因子
+    :param sequence(stock)|Block stks 证券组合
+    :param Query query: 查询条件
+    :param Stock ref_stk: 参照证券，通常使用 sh000300 沪深300
+    :param int n: 时间窗口
+    :param bool spearman: 使用 spearman 相关系数，否则为 pearson)");
+
+    m.def(
+      "ICIR",
+      [](const Indicator& ind, const py::object& stks, const KQuery& query, const Stock& ref_stk,
+         int n, int rolling_n, bool spearman) {
+          if (py::isinstance<Block>(stks)) {
+              const auto& blk = stks.cast<Block&>();
+              return ICIR(ind, blk, query, ref_stk, n, rolling_n, spearman);
+          }
+
+          if (py::isinstance<py::sequence>(stks)) {
+              StockList c_stks = python_list_to_vector<Stock>(stks);
+              return ICIR(ind, c_stks, query, ref_stk, n, rolling_n, spearman);
+          }
+
+          HKU_THROW("Input stks must be Block or sequenc(Stock)!");
+      },
+      py::arg("ind"), py::arg("stks"), py::arg("query"), py::arg("ref_stk"), py::arg("n") = 1,
+      py::arg("rolling_n") = 120, py::arg("spearman") = true,
+      R"(ICIR(ind, stks, query, ref_stk[, n=1, rolling_n=120])
+
+    计算 IC 因子 IR = IC的多周期均值/IC的标准方差
+
+    :param Indicator ind: 输入因子
+    :param sequence(stock)|Block stks 证券组合
+    :param Query query: 查询条件
+    :param Stock ref_stk: 参照证券，通常使用 sh000300 沪深300
+    :param int n: 计算IC时对应的 n 日收益率
+    :param int rolling_n: 滚动周期
+    :param bool spearman: 使用 spearman 相关系数，否则为 pearson)");
+
+    m.def("ZSCORE", ZSCORE_1, py::arg("out_extreme") = false, py::arg("nsigma") = 3.0,
+          py::arg("recursive") = false);
+    m.def("ZSCORE", ZSCORE_2, py::arg("data"), py::arg("out_extreme") = false,
+          py::arg("nsigma") = 3.0, py::arg("recursive") = false,
+          R"(ZSCORE(data[, out_extreme, nsigma, recursive])
+
+    对数据进行标准化（归一），可选进行极值排除
+
+    注：非窗口滚动，如需窗口滚动的标准化，直接 (x - MA(x, n)) / STDEV(x, n) 即可。
+    
+    :param Indicator data: 待剔除异常值的数据
+    :param bool outExtreme: 指示剔除极值，默认 False
+    :param float nsigma: 剔除极值时使用的 nsigma 倍 sigma，默认 3.0
+    :param bool recursive: 是否进行递归剔除极值，默认 False
+    :rtype: Indicator)");
+
+    m.def("TURNOVER", py::overload_cast<int>(TURNOVER), py::arg("n") = 1);
+    m.def("TURNOVER", py::overload_cast<const KData&, int>(TURNOVER), py::arg("kdata"),
+          py::arg("n") = 1, R"(TURNOVER(data[,n=1])
+    换手率=股票成交量/流通股股数×100%
+
+    :param int n: 时间窗口)");
+
+    m.def("RESULT", py::overload_cast<int>(RESULT));
+    m.def("RESULT", py::overload_cast<const Indicator&, int>(RESULT), py::arg("data"),
+          py::arg("result_ix"), R"(RESULT(data, result_ix)
+          
+    以公式指标的方式返回指定指标中的指定结果集
+
+    :param Indicator data: 指定的指标
+    :param int result_ix: 指定的结果集)");
+
+    m.def("FINANCE", py::overload_cast<int>(FINANCE), py::arg("ix"));
+    m.def("FINANCE", py::overload_cast<const string&>(FINANCE), py::arg("name"));
+    m.def("FINANCE", py::overload_cast<const KData&, int>(FINANCE), py::arg("kdata"),
+          py::arg("ix"));
+    m.def("FINANCE", py::overload_cast<const KData&, const string&>(FINANCE), py::arg("kdata"),
+          py::arg("name"),
+          R"(FINANCE([kdata, ix, name])
+
+    获取历史财务信息。（可通过 StockManager.get_history_finance_all_fields 查询相应的历史财务字段信息）
+
+    ix, name 使用时，为二选一。即要不使用 ix，要不就使用 name 进行获取。
+
+    :param KData kdata: K线数据
+    :param int ix: 历史财务信息字段索引
+    :param int name: 历史财务信息字段名称)");
+
+    m.def("BLOCKSETNUM", py::overload_cast<const Block&>(BLOCKSETNUM), py::arg("block"));
+    m.def("BLOCKSETNUM", py::overload_cast<const Block&, const KQuery&>(BLOCKSETNUM),
+          py::arg("block"), py::arg("query"), R"(BLOCKSETNUM(block, query)
+    
+    横向统计（返回板块股个数）
+
+    :param Block block: 待统计的板块
+    :param Query query: 统计范围)");
+
+    m.def(
+      "BLOCKSETNUM",
+      [](const py::sequence& stks) {
+          Block blk;
+          blk.add(python_list_to_vector<Stock>(stks));
+          return BLOCKSETNUM(blk);
+      },
+      py::arg("stks"));
+    m.def(
+      "BLOCKSETNUM",
+      [](const py::sequence& stks, const KQuery& query) {
+          Block blk;
+          blk.add(python_list_to_vector<Stock>(stks));
+          return BLOCKSETNUM(blk, query);
+      },
+      py::arg("stks"), py::arg("query"), R"(BLOCKSETNUM(block, query)
+    
+    横向统计（返回板块股个数）
+
+    :param Sequence stks: stock list
+    :param Query query: 统计范围)");
+
+    m.def("INSUM", py::overload_cast<const Block&, const Indicator&, int, bool>(INSUM),
+          py::arg("block"), py::arg("ind"), py::arg("mode"), py::arg("fill_null") = true);
+    m.def("INSUM",
+          py::overload_cast<const Block&, const KQuery&, const Indicator&, int, bool>(INSUM),
+          py::arg("block"), py::arg("query"), py::arg("ind"), py::arg("mode"),
+          py::arg("fill_null") = true,
+          R"(INSUM(block, query, ind, mode[, fill_null=True])
+
+    返回板块各成分该指标相应输出按计算类型得到的计算值.计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+
+    :param Block block: 指定板块
+    :param Query query: 指定范围
+    :param Indicator ind: 指定指标
+    :param int mode: 计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+    :param bool fill_null: 日期对齐时缺失数据填充 nan 值。
+    :rtype: Indicator)");
+
+    m.def(
+      "INSUM",
+      [](const py::sequence stks, const Indicator& ind, int mode, bool fill_null) {
+          Block blk;
+          blk.add(python_list_to_vector<Stock>(stks));
+          return INSUM(blk, ind, mode);
+      },
+      py::arg("stks"), py::arg("ind"), py::arg("mode"), py::arg("fill_null") = true);
+    m.def(
+      "INSUM",
+      [](const py::sequence stks, const KQuery& query, const Indicator& ind, int mode,
+         bool fill_null) {
+          Block blk;
+          blk.add(python_list_to_vector<Stock>(stks));
+          return INSUM(blk, query, ind, mode);
+      },
+      py::arg("stks"), py::arg("query"), py::arg("ind"), py::arg("mode"),
+      py::arg("fill_null") = true,
+      R"(INSUM(stks, query, ind, mode[, fill_null=True])
+
+    返回板块各成分该指标相应输出按计算类型得到的计算值.计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+
+    :param Sequence stks: stock list
+    :param Query query: 指定范围
+    :param Indicator ind: 指定指标
+    :param int mode: 计算类型:0-累加,1-平均数,2-最大值,3-最小值.
+    :param bool fill_null: 日期对齐时缺失数据填充 nan 值。
+    :rtype: Indicator)");
+
+    m.def("ISLASTBAR", py::overload_cast<>(ISLASTBAR));
+    m.def("ISLASTBAR", py::overload_cast<const KData&>(ISLASTBAR), py::arg("data"));
+    m.def("ISLASTBAR", py::overload_cast<const Indicator&>(ISLASTBAR), py::arg("data"),
+          R"(ISLASTBAR(ind)
+
+    判断当前数据是否为最后一个数据，若为最后一个数据，则返回1，否则返回0.
+
+    :param Indicator|KData data: 指定指标
+    :rtype: Indicator)");
+
+    m.def("ISNA", py::overload_cast<bool>(ISNA), py::arg("ignore_discard") = false);
+    m.def("ISNA", py::overload_cast<const Indicator&, bool>(ISNA), py::arg("ind"),
+          py::arg("ignore_discard") = false, R"(ISNA(ind[, ignore_discard=False])
+
+    判断指标是否为 nan 值，若为 nan 值, 则返回1, 否则返回0.
+
+    :param Indicator ind: 指定指标
+    :param bool ignore_discard: 忽略指标丢弃数据)");
+
+    m.def("ISINF", py::overload_cast<>(ISINF));
+    m.def("ISINF", py::overload_cast<const Indicator&>(ISINF), py::arg("ind"),
+          R"(ISINF(ind)
+
+    判断指标是否为正无穷大 (+inf) 值，若为 +inf 值, 则返回1, 否则返回0。如判断负无穷大, 使用 ISINFA。
+
+    :param Indicator ind: 指定指标
+    :rtype: Indicator)");
+
+    m.def("ISINFA", py::overload_cast<>(ISINFA));
+    m.def("ISINFA", py::overload_cast<const Indicator&>(ISINFA), py::arg("ind"),
+          R"(ISINFA(ind)
+
+    判断指标是否为负无穷大 (-inf) 值，若为 -inf 值, 则返回1, 否则返回0。如判断正无穷大, 使用 ISINF。
+
+    :param Indicator ind: 指定指标
+    :rtype: Indicator)");
+
+    double nan = Null<double>();
+    m.def("REPLACE", py::overload_cast<double, double, bool>(REPLACE), py::arg("old_value") = nan,
+          py::arg("new_value") = 0.0, py::arg("ignore_discard") = false);
+    m.def("REPLACE", py::overload_cast<const Indicator&, double, double, bool>(REPLACE),
+          py::arg("ind"), py::arg("old_value") = nan, py::arg("new_value") = 0.0,
+          py::arg("ignore_discard") = false,
+          R"(REPLACE(ind, [old_value=constant.nan, new_value=0.0, ignore_discard=False]
+          
+    替换指标中指定值，默认为替换 nan 值为 0.0。
+
+    :param Indicator ind: 指定指标
+    :param double old_value: 指定值
+    :param double new_value: 替换值
+    :param bool ignore_discard: 忽略指标丢弃数据
+    :rtype: Indicator)");
+
+    m.def("INDEXO", py::overload_cast<bool>(INDEXO), py::arg("fill_null") = true);
+    m.def("INDEXO", py::overload_cast<const KData&, bool>(INDEXO), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXO([kdata])
+    
+    返回对应的大盘开盘价,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXH", py::overload_cast<bool>(INDEXH), py::arg("fill_null") = true);
+    m.def("INDEXH", py::overload_cast<const KData&, bool>(INDEXH), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXH([kdata])
+    
+    返回对应的大盘最高价,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXL", py::overload_cast<bool>(INDEXL), py::arg("fill_null") = true);
+    m.def("INDEXL", py::overload_cast<const KData&, bool>(INDEXL), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXL([kdata])
+    
+    返回对应的大盘最低价,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXC", py::overload_cast<bool>(INDEXC), py::arg("fill_null") = true);
+    m.def("INDEXC", py::overload_cast<const KData&, bool>(INDEXC), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXC([kdata])
+    
+    返回对应的大盘收盘价,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXV", py::overload_cast<bool>(INDEXV), py::arg("fill_null") = true);
+    m.def("INDEXV", py::overload_cast<const KData&, bool>(INDEXV), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXV([kdata])
+    
+    返回对应的大盘成交量,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXA", py::overload_cast<bool>(INDEXA), py::arg("fill_null") = true);
+    m.def("INDEXA", py::overload_cast<const KData&, bool>(INDEXA), py::arg("kdata"),
+          py::arg("fill_null") = true, R"(INDEXA([kdata])
+    
+    返回对应的大盘成交金额,分别是上证指数,深证成指,科创50,创业板指)");
+
+    m.def("INDEXADV", py::overload_cast<>(INDEXADV));
+    m.def("INDEXADV", py::overload_cast<const KQuery&>(INDEXADV), R"(INDEXADV([query])
+    
+    通达信 880005 大盘上涨家数, 可能无法盘中更新!)");
+
+    m.def("INDEXDEC", py::overload_cast<>(INDEXDEC));
+    m.def("INDEXDEC", py::overload_cast<const KQuery&>(INDEXDEC), R"(INDEXDEC([query])
+    
+    通达信 880005 大盘下跌家数, 可能无法盘中更新!)");
+
+    m.def("WINNER", py::overload_cast<>(WINNER));
+    m.def("WINNER", py::overload_cast<const Indicator&>(WINNER));
+    m.def("WINNER", py::overload_cast<Indicator::value_t>(WINNER), R"(WINNER([ind])
+    
+    获利盘比例
+    用法: WINNER(CLOSE)　表示以当前收市价卖出的获利盘比例。
+    例如: 返回0.1表示10%获利盘;WINNER(10.5)表示10.5元价格的获利盘比例
+    该函数仅对日线分析周期有效，且仅对存在流通盘权息数据的证券有效，对指数、基金等无效。)");
+
+    m.def("INBLOCK", py::overload_cast<const string&, const string&>(INBLOCK), py::arg("category"),
+          py::arg("name"));
+    m.def("INBLOCK", py::overload_cast<const KData&, const string&, const string&>(INBLOCK),
+          py::arg("data"), py::arg("category"), py::arg("name"),
+          R"(INBLOCK(data, category, name)        
+
+    当前上下文证券是否在指定的板块中。
+
+    :param KData data: 指定的K线数据(上下文)
+    :param string category: 板块类别
+    :param string name: 板块名称
+    :rtype: Indicator)");
+
+    m.def("DISCARD", py::overload_cast<int>(DISCARD), py::arg("discard"));
+    m.def("DISCARD", py::overload_cast<const Indicator&, int>(DISCARD), py::arg("ind"),
+          py::arg("discard"), R"(DISCARD(data, discard)
+    
+    以指标公式的方式设置指标结果的丢弃数据量。
+
+    :param Indicator data: 指标
+    :param int discard: 丢弃数据量
+    :rtype: Indicator)");
+
+    m.def("LASTVALUE", py::overload_cast<bool>(LASTVALUE), py::arg("ignore_discard") = false);
+    m.def("LASTVALUE", py::overload_cast<const Indicator&, bool>(LASTVALUE), py::arg("ind"),
+          py::arg("ignore_discard") = false, R"(LASTVALUE(ind, [ignore_discard=False])
+
+    等同于通达信CONST指标。取输入指标最后值为常数, 即结果中所有值均为输入指标的最后值, 谨慎使用。含未来函数, 谨慎使用。
+
+    :param Indicator ind: 指标
+    :param bool ignore_discard: 忽略指标丢弃数据
+    :rtype: Indicator)");
+
+    m.def("JUMPUP", py::overload_cast<>(JUMPUP));
+    m.def("JUMPUP", py::overload_cast<const Indicator&>(JUMPUP), R"(JUMPUP([ind])
+    
+    边缘跳变，从小于等于0.0，跳变到 > 0.0
+    
+    :param Indicator ind: 指标
+    :rtype: Indicator)");
+
+    m.def("JUMPDOWN", py::overload_cast<>(JUMPDOWN));
+    m.def("JUMPDOWN", py::overload_cast<const Indicator&>(JUMPDOWN), R"(JUMPDOWN([ind])
+    
+    边缘跳变，从大于0.0，跳变到 <= 0.0
+
+    :param Indicator ind: 指标
+    :rtype: Indicator)");
+
+    m.def("CYCLE", py::overload_cast<int, const string&, bool>(CYCLE), py::arg("adjust_cycle") = 1,
+          py::arg("adjust_mode") = "query", py::arg("delay_to_trading_day") = true);
+    m.def("CYCLE", py::overload_cast<const KData&, int, const string&, bool>(CYCLE),
+          py::arg("kdata"), py::arg("adjust_cycle") = 1, py::arg("adjust_mode") = "query",
+          py::arg("delay_to_trading_day") = true,
+          R"(CYCLE(kdata, [adjust_cycle=1], [adjust_mode='query'], [delay_to_trading_day=True])
+          
+    PF调仓周期指标，主要用于PF调仓日验证，及作为SG
+
+    :param KData kdata: K线数据
+    :param int adjust_cycle: 调整周期
+    :param string adjust_mode: 调整方式
+    :param bool delay_to_trading_day: 调整周期是否延至交易日
+    :rtype: Indicator)");
+
+    m.def("KALMAN", py::overload_cast<double, double>(KALMAN), py::arg("q") = 0.01,
+          py::arg("r") = 0.1);
+    m.def("KALMAN", py::overload_cast<const Indicator&, double, double>(KALMAN), py::arg("ind"),
+          py::arg("q") = 0.01, py::arg("r") = 0.1, R"(KALMAN(ind, [q=0.01], [r=0.1])
+
+    Kalman滤波器, 用于平滑指标, 可设置平滑系数q和r, 默认q=0.01, r=0.1
+
+    :param Indicator ind: 指标
+    :param float q: 平滑系数
+    :param float r: 噪声系数
+    :rtype: Indicator)");
+
+    m.def("TR", py::overload_cast<>(TR));
+    m.def("TR", py::overload_cast<const KData&>(TR), py::arg("kdata"), R"(TR([kdata])
+
+    真实波动幅度(TR)是以下三个值中的最大值:
+    1. 当前周期最高价与最低价之差
+    2. 当前周期最高价与前一周期收盘价之差的绝对值
+    3. 当前周期最低价与前一周期收盘价之差的绝对值
+
+    :param KData kdata: K线数据
+    :rtype: Indicator)");
 }

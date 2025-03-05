@@ -1,10 +1,12 @@
 .. py:currentmodule:: hikyuu.trade_sys
 .. highlight:: python
 
-系统框架
+系统策略
 =============
 
 系统是指针对单个交易对象的完整策略，包括环境判断、系统有效条件、资金管理、止损、止盈、盈利目标、移滑价差的完整策略，用于模拟回测。
+
+对于多目标，在 Hikyuu 中需要使用投资组合，参见：:ref:`portfolio`。
 
 公共参数：
 
@@ -18,6 +20,67 @@
     * **ev_open_position=False** *(bool)*: 是否使用市场环境判定进行初始建仓
     * **cn_open_position=False** *(bool)*: 是否使用系统有效性条件进行初始建仓
     
+    * **shared_tm=False** *(bool)*: tm 部件是否为共享部件
+    * **shared_ev=True** *(bool)*: ev 部件是否为共享部件
+    * **shared_cn=False** *(bool)*: cv 部件是否为共享部件    
+    * **shared_mm=False** *(bool)*: mm 部件是否为共享部件
+    * **shared_sg=False** *(bool)*: sg 部件是否为共享部件
+    * **shared_st=False** *(bool)*: st 部件是否为共享部件
+    * **shared_tp=False** *(bool)*: tp 部件是否为共享部件
+    * **shared_pg=False** *(bool)*: pg 部件是否为共享部件
+    * **shared_sp=False** *(bool)*: sp 部件是否为共享部件
+
+
+.. raw:: html
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>部件命名规范</th>
+                <th>部件说明</th>
+                <th>部件用途</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>EV_Xxx</td>
+                <td>市场环境判定策略</td>
+                <td>用于判断市场环境，只有当市场有效时，才会实际发生交易。该策略通常可在不同的系统策略实例中共享，以减少计算量。</td>
+            </tr>
+            <tr>
+                <td>CN_Xxx</td>
+                <td>系统有效条件</td>
+                <td>用于判断系统本身适用条件，只有当条件有效时，才会实际发生交易。</td>
+            </tr>
+            <tr>
+                <td>SG_Xxx</td>
+                <td>信号指示器</td>
+                <td>负责产生买入、卖出信号。</td>
+            </tr>            
+            <tr>
+                <td>ST_Xxx</td>
+                <td>止损/止盈策略</td>
+                <td>止损：仅在交易发生亏损时生效，用于终止交易<br>止盈：仅在交易已盈利时生效，通过系统公共参数 tp_monotonic 控制是否保证递增</td>
+            </tr>
+            <tr>
+                <td>MM_Xxx</td>
+                <td>资金管理策略</td>
+                <td>用于控制交易风险，决定交易每次的买卖数量</td>
+            </tr>            
+            <tr>
+                <td>PG_Xxx</td>
+                <td>盈利目标策略</td>
+                <td>在交易达到盈利目标时退出交易，本质是一种特殊的止盈策略</td>
+            </tr>
+            <tr>
+                <td>SP_Xxx</td>
+                <td>移滑价差算法</td>
+                <td>仅用于回测，在回测时模拟实际交易时发生的计划价格和实际价格差异</td>
+            </tr>              
+        </tbody>
+    </table>
+    <p></p>
+
     
 创建系统并执行回测
 -----------------------
@@ -195,18 +258,20 @@
         
         :param Stock stock: 交易的证券
         :param Query query: K线数据查询条件
-        :param bool reset: 是否同时复位所有组件，尤其是tm实例
-        
-    .. py:method:: reset(self, with_tm, with_ev)
+        :param bool reset: 执行前是否依据系统部件共享属性复位
+        :param bool reset_all: 强制复位所有部件
+
+    .. py:method:: reset(self)
     
-        复位操作。TM、EV是和具体系统无关的策略组件，可以在不同的系统中进行共享，复位将引起系统运行时被重新清空并计算。尤其是在共享TM时需要注意！
+        复位，但不包括已有的交易对象，以及共享的部件
         
-        :param bool with_tm: 是否复位TM组件
-        :param bool with_ev: 是否复位EV组件
-        
+    .. py:method:: force_reset_all(self)
+
+        强制复位所有组件以及清空已有的交易对象，忽略组件的共享属性
+
     .. py:method:: clone(self)
     
-        克隆操作。
+        克隆操作，会依据部件的共享特性进行克隆，共享部件不进行实际的克隆操作，保持共享
 
         
         

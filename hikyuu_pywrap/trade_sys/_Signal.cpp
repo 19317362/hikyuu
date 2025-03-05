@@ -16,9 +16,10 @@ class PySignalBase : public SignalBase {
 
 public:
     using SignalBase::SignalBase;
+    PySignalBase(const SignalBase& base) : SignalBase(base) {}
 
-    void _calculate() override {
-        PYBIND11_OVERLOAD_PURE(void, SignalBase, _calculate, );
+    void _calculate(const KData& kdata) override {
+        PYBIND11_OVERLOAD_PURE(void, SignalBase, _calculate, kdata);
     }
 
     void _reset() override {
@@ -27,7 +28,8 @@ public:
 };
 
 void export_Signal(py::module& m) {
-    py::class_<SignalBase, SGPtr, PySignalBase>(m, "SignalBase", R"(信号指示器基类
+    py::class_<SignalBase, SGPtr, PySignalBase>(m, "SignalBase", py::dynamic_attr(),
+                                                R"(信号指示器基类
     信号指示器负责产生买入、卖出信号。
 
 公共参数：
@@ -42,6 +44,7 @@ void export_Signal(py::module& m) {
 
       .def(py::init<>())
       .def(py::init<const string&>())
+      .def(py::init<const SignalBase&>())
 
       .def("__str__", to_py_str<SignalBase>)
       .def("__repr__", to_py_str<SignalBase>)
@@ -49,7 +52,8 @@ void export_Signal(py::module& m) {
       .def_property("name", py::overload_cast<>(&SignalBase::name, py::const_),
                     py::overload_cast<const string&>(&SignalBase::name),
                     py::return_value_policy::copy, "名称")
-      .def_property("to", &SignalBase::getTO, &SignalBase::setTO, "设置或获取交易对象")
+      .def_property("to", &SignalBase::getTO, &SignalBase::setTO, py::return_value_policy::copy,
+                    "设置或获取交易对象")
 
       .def("get_param", &SignalBase::getParam<boost::any>, R"(get_param(self, name)
 
@@ -104,13 +108,18 @@ void export_Signal(py::module& m) {
 
     :rtype: DatetimeList)")
 
-      .def("_add_buy_signal", &SignalBase::_addBuySignal, R"(_add_buy_signal(self, datetime)
+      .def("_add_signal", &SignalBase::_addSignal, py::arg("datetime"), py::arg("value"), R"()")
+
+      .def("_add_buy_signal", &SignalBase::_addBuySignal, py::arg("datetime"),
+           py::arg("value") = 1.0,
+           R"(_add_buy_signal(self, datetime)
 
     加入买入信号，在_calculate中调用
 
     :param Datetime datetime: 指示买入的日期)")
 
-      .def("_add_sell_signal", &SignalBase::_addSellSignal, R"(_add_sell_signal(self, datetime)
+      .def("_add_sell_signal", &SignalBase::_addSellSignal, py::arg("datetime"),
+           py::arg("value") = -1.0, R"(_add_sell_signal(self, datetime)
 
     加入卖出信号，在_calculate中调用
 
@@ -118,18 +127,38 @@ void export_Signal(py::module& m) {
 
       .def("reset", &SignalBase::reset, "复位操作")
       .def("clone", &SignalBase::clone, "克隆操作")
-      .def("_calculate", &SignalBase::_calculate, "【重载接口】子类计算接口")
+      .def("_calculate", &SignalBase::_calculate, R"(_calculate(self, kdata)
+      
+    【重载接口】子类计算接口)")
+
       .def("_reset", &SignalBase::_reset, "【重载接口】子类复位接口，复位内部私有变量")
+
+      .def("__add__", [](const SignalPtr& self, const SignalPtr& other) { return self + other; })
+      .def("__add__", [](const SignalPtr& self, double other) { return self + other; })
+      .def("__radd__", [](const SignalPtr& self, double other) { return other + self; })
+      .def("__sub__", [](const SignalPtr& self, const SignalPtr& other) { return self - other; })
+      .def("__sub__", [](const SignalPtr& self, double other) { return self - other; })
+      .def("__rsub__", [](const SignalPtr& self, double other) { return other - self; })
+      .def("__mul__", [](const SignalPtr& self, const SignalPtr& other) { return self * other; })
+      .def("__mul__", [](const SignalPtr& self, double other) { return self * other; })
+      .def("__rmul__", [](const SignalPtr& self, double other) { return other * self; })
+      .def("__truediv__",
+           [](const SignalPtr& self, const SignalPtr& other) { return self / other; })
+      .def("__truediv__", [](const SignalPtr& self, double other) { return self / other; })
+      .def("__rtruediv__", [](const SignalPtr& self, double other) { return other / self; })
+      .def("__and__", [](const SignalPtr& self, const SignalPtr& other) { return self & other; })
+      .def("__or__", [](const SignalPtr& self, const SignalPtr& other) { return self | other; })
 
         DEF_PICKLE(SGPtr);
 
-    m.def("SG_Bool", SG_Bool, py::arg("buy"), py::arg("sell"),
+    m.def("SG_Bool", SG_Bool, py::arg("buy"), py::arg("sell"), py::arg("alternate") = true,
           R"(SG_Bool(buy, sell)
 
     布尔信号指示器，使用运算结果为类似bool数组的Indicator分别作为买入、卖出指示。
 
     :param Indicator buy: 买入指示（结果Indicator中相应位置>0则代表买入）
     :param Indicator sell: 卖出指示（结果Indicator中相应位置>0则代表卖出）
+    :param bool alternate: 是否交替买入卖出，默认为True
     :return: 信号指示器)");
 
     m.def("SG_Single", SG_Single, py::arg("ind"), py::arg("filter_n") = 10,
@@ -197,11 +226,129 @@ void export_Signal(py::module& m) {
     :param int slow_n: 慢线EMA周期
     :return: 信号指示器)");
 
-    m.def("SG_Band", SG_Band, py::arg("ind"), py::arg("lower"), py::arg("upper"),
+    m.def("SG_Band",
+          py::overload_cast<const Indicator&, const Indicator&, const Indicator&>(SG_Band),
+          py::arg("ind"), py::arg("lower"), py::arg("upper"));
+    m.def("SG_Band", py::overload_cast<const Indicator&, price_t, price_t>(SG_Band), py::arg("ind"),
+          py::arg("lower"), py::arg("upper"),
           R"(SG_Band(ind, lower, upper)
+          
     指标区间指示器, 当指标超过上轨时，买入；
     当指标低于下轨时，卖出。::
 
         SG_Band(MA(C, n=10), 100, 200)
-      )");
+        SG_Band(CLOSE, MA(LOW), MA(HIGH)))");
+
+    m.def("SG_AllwaysBuy", SG_AllwaysBuy, R"(SG_AllwaysBuy()
+    
+    一个特殊的SG，持续每天发出买入信号，通常配合 PF 使用)");
+
+    m.def("SG_Cycle", SG_Cycle, R"(SG_Cycle()
+    
+    一个特殊的SG，配合PF使用，以 PF 调仓周期为买入信号)");
+
+    m.def("SG_OneSide", SG_OneSide, py::arg("ind"), py::arg("is_buy"),
+          R"(SG_OneSide(ind, is_buy)
+          
+    根据输入指标构建单边信号（单纯的只包含买入或卖出信号），如果指标值大于0，则加入信号。也可以使用 SG_Buy 或 SG_Sell 函数。
+    
+    :param Indicator ind: 输入指标
+    :param bool is_buy: 构建的是买入信号，否则为卖出信号
+    :return: 信号指示器)");
+
+    m.def("SG_Buy", SG_Buy, py::arg("ind"), R"(SG_Buy(ind)
+    
+    生成单边买入信号
+
+    :param Indicator ind: 输入指标
+    :return: 信号指示器)");
+
+    m.def("SG_Sell", SG_Sell, py::arg("ind"), R"(SG_Sell(ind)
+    
+    生成单边卖出信号
+
+    :param Indicator ind: 输入指标
+    :return: 信号指示器)");
+
+    m.def(
+      "SG_Add",
+      [](const py::sequence& sg_list, bool alternate) {
+          vector<SignalPtr> sg_vec = python_list_to_vector<SignalPtr>(sg_list);
+          return SG_Add(sg_vec, alternate);
+      },
+      py::arg("sg_list"), py::arg("alternate"));
+    m.def("SG_Add", py::overload_cast<const SignalPtr&, const SignalPtr&, bool>(SG_Add),
+          py::arg("sg1"), py::arg("sg2"), py::arg("alternate"),
+          R"(SG_Add(sg1, sg2, alternate)
+
+    生成两个指标之和的信号
+
+    由于 SG 的 alternate 默认为 True, 在使用如  "sg1 + sg2 + sg3" 的形式时，容易忽略 sg1 + sg2 的 alternate 属性
+    建议使用: SG_Add(sg1, sg2, False) + sg3 来避免 alternate 的问题
+
+    :param SignalBase sg1: 输入信号1
+    :param SignalBase sg2: 输入信号2
+    :param bool alternate: 是否交替买入卖出，默认为True
+    :return: 信号指示器)");
+
+    m.def(
+      "SG_Sub",
+      [](const py::sequence& sg_list, bool alternate) {
+          vector<SignalPtr> sg_vec = python_list_to_vector<SignalPtr>(sg_list);
+          return SG_Sub(sg_vec, alternate);
+      },
+      py::arg("sg_list"), py::arg("alternate"));
+    m.def("SG_Sub", py::overload_cast<const SignalPtr&, const SignalPtr&, bool>(SG_Sub),
+          py::arg("sg1"), py::arg("sg2"), py::arg("alternate"),
+          R"(SG_Sub(sg1, sg2, alternate)
+
+    生成两个指标之差的信号
+
+    由于 SG 的 alternate 默认为 True, 在使用如  "sg1 + sg2 + sg3" 的形式时，容易忽略 sg1 + sg2 的 alternate 属性
+    建议使用: SG_Add(sg1, sg2, False) + sg3 来避免 alternate 的问题
+
+    :param SignalBase sg1: 输入信号1
+    :param SignalBase sg2: 输入信号2
+    :param bool alternate: 是否交替买入卖出，默认为True
+    :return: 信号指示器)");
+
+    m.def(
+      "SG_Mul",
+      [](const py::sequence& sg_list, bool alternate) {
+          vector<SignalPtr> sg_vec = python_list_to_vector<SignalPtr>(sg_list);
+          return SG_Mul(sg_vec, alternate);
+      },
+      py::arg("sg_list"), py::arg("alternate"));
+    m.def("SG_Mul", py::overload_cast<const SignalPtr&, const SignalPtr&, bool>(SG_Mul),
+          py::arg("sg1"), py::arg("sg2"), py::arg("alternate"),
+          R"(SG_Mul(sg1, sg2, alternate)
+
+    生成两个指标之差的信号
+
+    由于 SG 的 alternate 默认为 True, 在使用如  "sg1 + sg2 + sg3" 的形式时，容易忽略 sg1 + sg2 的 alternate 属性
+    建议使用: SG_Add(sg1, sg2, False) + sg3 来避免 alternate 的问题
+
+    :param SignalBase sg1: 输入信号1
+    :param SignalBase sg2: 输入信号2
+    :param bool alternate: 是否交替买入卖出，默认为True)");
+
+    m.def(
+      "SG_Div",
+      [](const py::sequence& sg_list, bool alternate) {
+          vector<SignalPtr> sg_vec = python_list_to_vector<SignalPtr>(sg_list);
+          return SG_Div(sg_vec, alternate);
+      },
+      py::arg("sg_list"), py::arg("alternate"));
+    m.def("SG_Div", py::overload_cast<const SignalPtr&, const SignalPtr&, bool>(SG_Div),
+          py::arg("sg1"), py::arg("sg2"), py::arg("alternate"),
+          R"(SG_Div(sg1, sg2, alternate)
+
+    生成两个指标之差的信号
+
+    由于 SG 的 alternate 默认为 True, 在使用如  "sg1 + sg2 + sg3" 的形式时，容易忽略 sg1 + sg2 的 alternate 属性
+    建议使用: SG_Add(sg1, sg2, False) + sg3 来避免 alternate 的问题
+
+    :param SignalBase sg1: 输入信号1
+    :param SignalBase sg2: 输入信号2
+    :param bool alternate: 是否交替买入卖出，默认为True)");
 }

@@ -23,18 +23,9 @@ HKU_API std::ostream& operator<<(std::ostream& os, const FundsRecord& funds) {
     return os;
 }
 
-FundsRecord::FundsRecord()
-: cash(0.0),
-  market_value(0.0),
-  short_market_value(0.0),
-  base_cash(0.0),
-  base_asset(0.0),
-  borrow_cash(0.0),
-  borrow_asset(0.0) {}
-
-FundsRecord ::FundsRecord(price_t cash, price_t market_value, price_t short_market_value,
-                          price_t base_cash, price_t base_asset, price_t borrow_cash,
-                          price_t borrow_asset)
+FundsRecord::FundsRecord(price_t cash, price_t market_value, price_t short_market_value,
+                         price_t base_cash, price_t base_asset, price_t borrow_cash,
+                         price_t borrow_asset)
 : cash(cash),
   market_value(market_value),
   short_market_value(short_market_value),
@@ -43,7 +34,7 @@ FundsRecord ::FundsRecord(price_t cash, price_t market_value, price_t short_mark
   borrow_cash(borrow_cash),
   borrow_asset(borrow_asset) {}
 
-FundsRecord FundsRecord::operator+(const FundsRecord other) {
+FundsRecord FundsRecord::operator+(const FundsRecord& other) const {
     FundsRecord result;
     result.cash = cash + other.cash;
     result.market_value = market_value + other.market_value;
@@ -55,7 +46,7 @@ FundsRecord FundsRecord::operator+(const FundsRecord other) {
     return result;
 }
 
-FundsRecord& FundsRecord::operator+=(const FundsRecord other) {
+FundsRecord& FundsRecord::operator+=(const FundsRecord& other) {
     cash += other.cash;
     market_value += other.market_value;
     short_market_value += other.short_market_value;

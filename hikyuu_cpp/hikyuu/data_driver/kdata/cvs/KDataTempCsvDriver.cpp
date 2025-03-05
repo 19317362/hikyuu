@@ -8,9 +8,8 @@
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+#include "hikyuu/utilities/Log.h"
 #include "KDataTempCsvDriver.h"
-
-#include "../../../Log.h"
 
 namespace hku {
 
@@ -80,7 +79,8 @@ void KDataTempCsvDriver::_get_title_column(const string& line) {
     }
 }
 
-size_t KDataTempCsvDriver::getCount(const string& market, const string& code, KQuery::KType kType) {
+size_t KDataTempCsvDriver::getCount(const string& market, const string& code,
+                                    const KQuery::KType& kType) {
     return getKRecordList(market, code, KQuery(0, Null<int64_t>(), kType)).size();
 }
 
@@ -138,7 +138,7 @@ KRecordList KDataTempCsvDriver::getKRecordList(const string& market, const strin
 
 KRecordList KDataTempCsvDriver::_getKRecordListByIndex(const string& market, const string& code,
                                                        int64_t start_ix, int64_t end_ix,
-                                                       KQuery::KType kType) {
+                                                       const KQuery::KType& kType) {
     KRecordList result;
 
     string filename;
@@ -152,7 +152,7 @@ KRecordList KDataTempCsvDriver::_getKRecordListByIndex(const string& market, con
     }
 
     std::ifstream infile(filename.c_str());
-    HKU_ERROR_IF_RETURN(!infile, result, "Can't open this file: {}", filename);
+    HKU_ERROR_IF_RETURN(!infile, result, "Can't open this file: {}, ktype: {}", filename, kType);
     string line;
     if (!std::getline(infile, line)) {
         infile.close();

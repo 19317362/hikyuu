@@ -12,6 +12,12 @@ Welcome to Hikyuu's documentation!
    overview
    install
    quickstart
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Python指南
+
+   hub.rst
    interactive/index
    base/index
    stock_manager
@@ -19,10 +25,24 @@ Welcome to Hikyuu's documentation!
    trade_manage/trade_manage
    trade_sys/trade_sys
    trade_portfolio/trade_portfolio
-   kdriver/data_driver.rst
+   trade_sys/walkforward
+   strategy
    reference
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: C++开发指南
+   :name: C++ Develop Guide
+
    developer.rst
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Release
+
    release
+
    
 Indices and tables
 ==================

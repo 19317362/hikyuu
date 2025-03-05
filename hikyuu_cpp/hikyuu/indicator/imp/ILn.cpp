@@ -17,10 +17,6 @@ ILn::ILn() : IndicatorImp("LN", 1) {}
 
 ILn::~ILn() {}
 
-bool ILn::check() {
-    return true;
-}
-
 void ILn::_calculate(const Indicator& data) {
     size_t total = data.size();
     m_discard = data.discard();
@@ -29,13 +25,10 @@ void ILn::_calculate(const Indicator& data) {
         return;
     }
 
-    price_t null_price = Null<price_t>();
+    auto const* src = data.data();
+    auto* dst = this->data();
     for (size_t i = m_discard; i < total; ++i) {
-        if (data[i] <= 0.0) {
-            _set(null_price, i);
-        } else {
-            _set(std::log(data[i]), i);
-        }
+        dst[i] = std::log(src[i]);
     }
 }
 

@@ -7,6 +7,7 @@
  *      Author: fasiondog
  */
 
+#include "hikyuu/utilities/config.h"
 #include "MySQLConnect.h"
 
 #ifdef __GNUC__
@@ -51,9 +52,13 @@ void MySQLConnect::connect() {
         // HKU_TRACE("MYSQL port: {}", port);
         // HKU_TRACE("MYSQL database: {}", database);
 
+#if MYSQL_VERSION_ID < 80034
+        // mysql 后续不再支持自动重连选项
+        // see: https://dev.mysql.com/doc/c-api/8.2/en/c-api-auto-reconnect.html
         my_bool reconnect = 1;
         SQL_CHECK(mysql_options(m_mysql, MYSQL_OPT_RECONNECT, &reconnect) == 0,
                   mysql_errno(m_mysql), "Failed set reconnect options, {}", mysql_error(m_mysql));
+#endif
 
         // 20220314: 新版 mysqlclient 默认 ssl 可能被开启，这里强制设为关闭
         unsigned int ssl_mode = SSL_MODE_DISABLED;
@@ -85,7 +90,7 @@ void MySQLConnect::connect() {
         close();
         const char* errmsg = "Failed create MySQLConnect instance! Unknown error";
         HKU_ERROR(errmsg);
-        HKU_THROW(errmsg);
+        HKU_THROW("{}", errmsg);
     }
 }
 
@@ -106,7 +111,7 @@ bool MySQLConnect::ping() {
 }
 
 int64_t MySQLConnect::exec(const std::string& sql_string) {
-#ifdef HKU_SQL_TRACE
+#if HKU_SQL_TRACE
     HKU_DEBUG(sql_string);
 #endif
     if (!m_mysql) {
@@ -119,12 +124,12 @@ int64_t MySQLConnect::exec(const std::string& sql_string) {
         if (ping()) {
             ret = mysql_query(m_mysql, sql_string.c_str());
         } else {
-            SQL_THROW(ret, "SQL error：{}! error msg: {}", sql_string, mysql_error(m_mysql));
+            SQL_THROW(ret, "SQL error: {}! error msg: {}", sql_string, mysql_error(m_mysql));
         }
     }
 
     if (ret) {
-        SQL_THROW(ret, "SQL error：{}! error msg: {}", sql_string, mysql_error(m_mysql));
+        SQL_THROW(ret, "SQL error: {}! error msg: {}", sql_string, mysql_error(m_mysql));
     }
 
     int64_t affect_rows = mysql_affected_rows(m_mysql);
@@ -154,11 +159,11 @@ int64_t MySQLConnect::exec(const std::string& sql_string) {
     return affect_rows;
 }
 
-SQLStatementPtr MySQLConnect::getStatement(const string& sql_statement) {
-    return make_shared<MySQLStatement>(this, sql_statement);
+SQLStatementPtr MySQLConnect::getStatement(const std::string& sql_statement) {
+    return std::make_shared<MySQLStatement>(this, sql_statement);
 }
 
-bool MySQLConnect::tableExist(const string& tablename) {
+bool MySQLConnect::tableExist(const std::string& tablename) {
     bool result = false;
     try {
         SQLStatementPtr st = getStatement(fmt::format("SELECT 1 FROM {} LIMIT 1;", tablename));
@@ -176,24 +181,12 @@ void MySQLConnect::resetAutoIncrement(const std::string& tablename) {
     exec(fmt::format("alter {} auto_increment=1", tablename));
 }
 
-void MySQLConnect::transaction() noexcept {
-    try {
-        exec("BEGIN");
-    } catch (const std::exception& e) {
-        HKU_ERROR("Failed transaction! {}", e.what());
-    } catch (...) {
-        HKU_ERROR("Unknown error!");
-    }
+void MySQLConnect::transaction() {
+    exec("BEGIN");
 }
 
-void MySQLConnect::commit() noexcept {
-    try {
-        exec("COMMIT");
-    } catch (const std::exception& e) {
-        HKU_ERROR("Failed transaction! {}", e.what());
-    } catch (...) {
-        HKU_ERROR("Unknown error!");
-    }
+void MySQLConnect::commit() {
+    exec("COMMIT");
 }
 
 void MySQLConnect::rollback() noexcept {

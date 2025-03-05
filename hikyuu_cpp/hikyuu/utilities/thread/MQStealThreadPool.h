@@ -22,8 +22,8 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
-#ifndef HKU_API
-#define HKU_API
+#ifndef HKU_UTILS_API
+#define HKU_UTILS_API
 #endif
 
 namespace hku {
@@ -35,7 +35,7 @@ namespace hku {
 #ifdef _MSC_VER
 class MQStealThreadPool {
 #else
-class HKU_API MQStealThreadPool {
+class HKU_UTILS_API MQStealThreadPool {
 #endif
 public:
     /**
@@ -47,10 +47,9 @@ public:
      * 构造函数，创建指定数量的线程
      * @param n 指定的线程数
      * @param until_empty 任务队列为空时，自动停止运行
-     * @param exit_thread_callback 工作线程结束时回调函数
      */
-    explicit MQStealThreadPool(size_t n, bool util_empty = true)
-    : m_done(false), m_worker_num(n), m_runnging_util_empty(util_empty) {
+    explicit MQStealThreadPool(size_t n, bool until_empty = true)
+    : m_done(false), m_worker_num(n), m_runnging_until_empty(until_empty) {
         try {
             m_interrupt_flags.resize(m_worker_num, nullptr);
             for (size_t i = 0; i < m_worker_num; i++) {
@@ -58,7 +57,7 @@ public:
                 m_queues.emplace_back(new MQStealQueue<task_type>);
             }
             // 初始完毕所有线程资源后再启动线程
-            for (size_t i = 0; i < m_worker_num; i++) {
+            for (int i = 0; i < m_worker_num; i++) {
                 m_threads.emplace_back(&MQStealThreadPool::worker_thread, this, i);
             }
         } catch (...) {
@@ -105,12 +104,12 @@ public:
 
     /** 向线程池提交任务 */
     template <typename FunctionType>
-    task_handle<typename std::result_of<FunctionType()>::type> submit(FunctionType f) {
+    auto submit(FunctionType f) {
         if (m_thread_need_stop.isSet() || m_done) {
             throw std::logic_error("You can't submit a task to the stopped MQStealThreadPool!");
         }
 
-        typedef typename std::result_of<FunctionType()>::type result_type;
+        typedef typename std::invoke_result<FunctionType>::type result_type;
         std::packaged_task<result_type()> task(f);
         task_handle<result_type> res(task.get_future());
 
@@ -165,7 +164,7 @@ public:
             if (m_interrupt_flags[i]) {
                 m_interrupt_flags[i]->set();
             }
-            m_queues[i]->push(std::move(FuncWrapper()));
+            m_queues[i]->push(FuncWrapper());
         }
 
         for (size_t i = 0; i < m_worker_num; i++) {
@@ -189,7 +188,7 @@ public:
         }
 
         // 指示各工作线程在未获取到工作任务时，停止运行
-        if (m_runnging_util_empty) {
+        if (m_runnging_until_empty) {
             while (true) {
                 bool can_quit = true;
                 for (size_t i = 0; i < m_worker_num; i++) {
@@ -215,7 +214,7 @@ public:
         }
 
         for (size_t i = 0; i < m_worker_num; i++) {
-            m_queues[i]->push(std::move(FuncWrapper()));
+            m_queues[i]->push(FuncWrapper());
         }
 
         // 等待线程结束
@@ -234,9 +233,9 @@ public:
 
 private:
     typedef FuncWrapper task_type;
-    std::atomic_bool m_done;     // 线程池全局需终止指示
-    size_t m_worker_num;         // 工作线程数量
-    bool m_runnging_util_empty;  // 运行直到队列空时停止
+    std::atomic_bool m_done;      // 线程池全局需终止指示
+    size_t m_worker_num;          // 工作线程数量
+    bool m_runnging_until_empty;  // 运行直到队列空时停止
 
     std::vector<std::unique_ptr<MQStealQueue<task_type>>> m_queues;  // 线程任务队列
     std::vector<InterruptFlag*> m_interrupt_flags;                   // 线程终止标志

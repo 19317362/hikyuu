@@ -29,7 +29,7 @@
 # 1. 20171122, Added by fasiondog
 # ===============================================================================
 
-from hikyuu.core import KData, Indicator, SignalBase, ConditionBase, System
+from hikyuu.core import KData, Indicator, SignalBase, ConditionBase, EnvironmentBase, System, Portfolio, TradeManager
 
 import matplotlib
 from matplotlib.pylab import gca as mpl_gca
@@ -42,11 +42,19 @@ from .matplotlib_draw import iplot as mpl_iplot
 from .matplotlib_draw import ibar as mpl_ibar
 from .matplotlib_draw import sgplot as mpl_sgplot
 from .matplotlib_draw import cnplot as mpl_cnplot
+from .matplotlib_draw import evplot as mpl_evplot
 from .matplotlib_draw import sysplot as mpl_sysplot
 from .matplotlib_draw import ax_draw_macd as mpl_ax_draw_macd
 from .matplotlib_draw import ax_draw_macd2 as mpl_ax_draw_macd2
 from .matplotlib_draw import ax_set_locator_formatter as mpl_ax_set_locator_formatter
 from .matplotlib_draw import adjust_axes_show as mpl_adjust_axes_show
+from .matplotlib_draw import sys_performance as mpl_sys_performance
+from .matplotlib_draw import tm_heatmap as mpl_tm_heatmap
+from .matplotlib_draw import sys_heatmap as mpl_sys_heatmap
+from .matplotlib_draw import iheatmap as mpl_iheatmap
+from .matplotlib_draw import (DRAWNULL, STICKLINE, DRAWBAND, RGB, PLOYLINE,
+                              DRAWLINE, DRAWTEXT, DRAWNUMBER, DRAWTEXT_FIX, DRAWNUMBER_FIX, DRAWSL,
+                              DRAWIMG, DRAWICON, DRAWBMP, SHOWICONS, DRAWRECTREL)
 
 from .bokeh_draw import gcf as bk_gcf
 from .bokeh_draw import gca as bk_gca
@@ -64,8 +72,7 @@ from .echarts_draw import sysplot as ec_sysplot
 from .echarts_draw import iplot as ec_iplot
 from .echarts_draw import ibar as ec_ibar
 from .echarts_draw import kplot as ec_kplot
-
-from .common import in_ipython_frontend
+from .echarts_draw import sys_performance as ec_sys_performance
 
 g_draw_engine = 'matplotlib'
 
@@ -115,11 +122,19 @@ def use_draw_with_matplotlib():
 
     Indicator.plot = mpl_iplot
     Indicator.bar = mpl_ibar
+    Indicator.heatmap = mpl_iheatmap
 
     SignalBase.plot = mpl_sgplot
+
+    EnvironmentBase.plot = mpl_evplot
     ConditionBase.plot = mpl_cnplot
 
     System.plot = mpl_sysplot
+    System.performance = mpl_sys_performance
+    Portfolio.performance = mpl_sys_performance
+    TradeManager.heatmap = mpl_tm_heatmap
+    System.heatmap = mpl_sys_heatmap
+    Portfolio.heatmap = mpl_sys_heatmap
 
 
 def use_draw_with_echarts():
@@ -133,6 +148,8 @@ def use_draw_with_echarts():
     Indicator.bar = ec_ibar
 
     System.plot = ec_sysplot
+    System.performance = ec_sys_performance
+    Portfolio.performance = ec_sys_performance
 
 
 def create_figure(n=1, figsize=None):
@@ -283,5 +300,8 @@ __all__ = [
     'ax_draw_macd',
     'ax_draw_macd2',
     'use_bokeh_in_notebook',
-    'use_draw_with_echarts'
+    'use_draw_with_echarts',
+    'DRAWNULL', 'STICKLINE', 'DRAWBAND', 'RGB', 'PLOYLINE', 'DRAWLINE', 'DRAWTEXT', 'DRAWNUMBER',
+    'DRAWTEXT_FIX', 'DRAWNUMBER_FIX', 'DRAWSL', 'DRAWIMG', 'DRAWICON', 'DRAWBMP', 'SHOWICONS',
+    'DRAWRECTREL'
 ]

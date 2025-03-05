@@ -14,6 +14,7 @@
 #include "KQuery.h"
 #include "TimeLineRecord.h"
 #include "TransRecord.h"
+#include "HistoryFinanceInfo.h"
 
 namespace hku {
 
@@ -27,6 +28,7 @@ typedef DriverConnectPool<KDataDriverConnect> KDataDriverConnectPool;
 typedef shared_ptr<KDataDriverConnectPool> KDataDriverConnectPoolPtr;
 class HKU_API KData;
 class HKU_API Parameter;
+class HKU_API Block;
 
 /**
  * Stock基类，Application中一般使用StockPtr进行操作
@@ -94,10 +96,10 @@ public:
     bool valid() const;
 
     /** 获取证券起始日期 */
-    Datetime startDatetime() const;
+    const Datetime& startDatetime() const;
 
     /** 获取证券最后日期 */
-    Datetime lastDatetime() const;
+    const Datetime& lastDatetime() const;
 
     /** 获取最小跳动量 */
     price_t tick() const;
@@ -120,6 +122,22 @@ public:
     /** 获取最大交易量 */
     double maxTradeNumber() const;
 
+    void market(const string& market_);
+    void code(const string& code_);
+    void name(const string& name_);
+    void type(uint32_t type_);
+    void valid(bool valid_);
+    void precision(int precision_);
+    void startDatetime(const Datetime&);
+    void lastDatetime(const Datetime&);
+    void tick(price_t tick_);
+    void tickValue(price_t val);
+    void minTradeNumber(double num);
+    void maxTradeNumber(double num);
+    void atom(double num) {
+        return minTradeNumber(num);
+    }
+
     /**
      * 获取指定时间段[start,end)内的权息信息
      * @param start 起始日期
@@ -132,7 +150,7 @@ public:
     /** 获取不同类型K线数据量 */
     size_t getCount(KQuery::KType dataType = KQuery::DAY) const;
 
-    /** 获取指定日期时刻的市值，即小于等于指定日期的最后一条记录的收盘价 */
+    /** 获取指定日期时刻的市值，即小于等于指定日期的最后一条记录的收盘价, 如果证券已失效，则为0 */
     price_t getMarketValue(const Datetime&, KQuery::KType) const;
 
     /**
@@ -144,11 +162,11 @@ public:
      */
     bool getIndexRange(const KQuery& query, size_t& out_start, size_t& out_end) const;
 
-    /** 获取指定索引的K线数据记录，未作越界检查 */
-    KRecord getKRecord(size_t pos, KQuery::KType dataType = KQuery::DAY) const;
+    /** 获取指定索引的K线数据记录，pos 无效时返回 Null<KRecord> */
+    KRecord getKRecord(size_t pos, const KQuery::KType& dataType = KQuery::DAY) const;
 
     /** 根据数据类型（日线/周线等），获取指定日期的KRecord */
-    KRecord getKRecord(const Datetime&, KQuery::KType ktype = KQuery::DAY) const;
+    KRecord getKRecord(const Datetime&, const KQuery::KType& ktype = KQuery::DAY) const;
 
     /** 获取K线数据 */
     KData getKData(const KQuery&) const;
@@ -175,10 +193,23 @@ public:
     Parameter getFinanceInfo() const;
 
     /**
-     * 获取历史财务信息
-     * @param date 指定日期必须是0331、0630、0930、1231，如 Datetime(201109300000)
+     * 获取所属板块列表
+     * @param category 指定的板块分类，如果为空，则返回所有板块分类的所属板块
+     * @return BlockList
      */
-    PriceList getHistoryFinanceInfo(const Datetime& date) const;
+    vector<Block> getBelongToBlockList(const string& category) const;
+
+    /**
+     * 获取历史财务信息
+     */
+    const vector<HistoryFinanceInfo>& getHistoryFinance() const;
+
+    /**
+     * 获取自身市场的交易日日历（不是本身的交易日期）
+     * @param query
+     * @return DatetimeList
+     */
+    DatetimeList getTradingCalendar(const KQuery& query) const;
 
     /** 设置权息信息, 仅供初始化时调用 */
     void setWeightList(const StockWeightList&);
@@ -213,6 +244,13 @@ public:
     /** （临时函数）只用于更新缓存中的K线数据 **/
     void realtimeUpdate(KRecord, KQuery::KType ktype = KQuery::DAY);
 
+    /**
+     * 部分临时创建的 Stock, 直接设置KRecordList
+     * @note 谨慎调用，通常供外部数据源直接设定数据
+     */
+    void setKRecordList(const KRecordList& ks, const KQuery::KType& ktype = KQuery::DAY);
+    void setKRecordList(KRecordList&& ks, const KQuery::KType& ktype = KQuery::DAY);
+
     /** 仅用于python的__str__ */
     string toString() const;
 
@@ -221,7 +259,7 @@ private:
 
     // 以下函数属于基础操作添加了读锁
     size_t _getCountFromBuffer(KQuery::KType ktype) const;
-    KRecord _getKRecordFromBuffer(size_t pos, KQuery::KType ktype) const;
+    KRecord _getKRecordFromBuffer(size_t pos, const KQuery::KType& ktype) const;
     KRecordList _getKRecordListFromBuffer(size_t start_ix, size_t end_ix,
                                           KQuery::KType ktype) const;
     bool _getIndexRangeByDateFromBuffer(const KQuery&, size_t&, size_t&) const;
@@ -245,6 +283,11 @@ struct HKU_API Stock::Data {
     StockWeightList m_weightList;  // 权息信息列表
     std::mutex m_weight_mutex;
 
+    mutable vector<HistoryFinanceInfo>
+      m_history_finance;  // 历史财务信息 [财务报告日期, 字段1, 字段2, ...]
+    mutable std::atomic_bool m_history_finance_ready{false};
+    mutable std::mutex m_history_finance_mutex;
+
     price_t m_tick;
     price_t m_tickValue;
     price_t m_unit;
@@ -259,7 +302,7 @@ struct HKU_API Stock::Data {
     Data(const string& market, const string& code, const string& name, uint32_t type, bool valid,
          const Datetime& startDate, const Datetime& lastDate, price_t tick, price_t tickValue,
          int precision, double minTradeNumber, double maxTradeNumber);
-
+    string marketCode() const;
     virtual ~Data();
 };
 

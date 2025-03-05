@@ -1,189 +1,180 @@
 set_xmakever("2.8.2")
 
-option("hdf5")
-    set_default(true)
-    set_showmenu(true)
-    set_category("hikyuu")
-    set_description("Enable hdf5 kdata engine.")
-option_end()
+-- project
+set_project("hikyuu")
+
+add_rules("mode.debug", "mode.release")
+
+-- version
+set_version("2.5.2", {build = "%Y%m%d%H%M"})
+
+set_warnings("all")
+
+-- set language: C99, c++ standard
+set_languages("c++17")
+
 
 option("mysql")
     set_default(true)
     set_showmenu(true)
     set_category("hikyuu")
     set_description("Enable mysql kdata engine.")
-    if is_plat("macosx") then
-        if os.exists("/usr/local/opt/mysql-client/lib") then
-            add_includedirs("/usr/local/opt/mysql-client/include/mysql")
-            add_includedirs("/usr/local/opt/mysql-client/include")
-            add_linkdirs("/usr/local/opt/mysql-client/lib")
-            add_rpathdirs("/usr/local/opt/mysql-client/lib")
-        end
-        if os.exists("/usr/local/mysql/lib") then
-            add_linkdirs("/usr/local/mysql/lib")
-            add_rpathdirs("/usr/local/mysql/lib")
-        end
-        if not os.exists("/usr/local/include/mysql") then
-            if os.exists("/usr/local/mysql/include") then
-                os.run("ln -s /usr/local/mysql/include /usr/local/include/mysql")
-            else
-                print("Not Found MySQL include dir!")
-            end
-        end
-        add_links("mysqlclient")
-    elseif is_plat("windows") then
+    if is_plat("windows") then
         add_defines("NOMINMAX")
     end        
 option_end()
 
-option("sqlite")
+option("hdf5", {description = "Enable hdf5 kdata engine.", default = true})
+option("sqlite", {description = "Enable sqlite kdata engine.", default = true})
+option("tdx", {description = "Enable tdx kdata engine.", default = true})
+option("sql_trace", {description = "trace print sql", default = false})
+
+-- 注意：stacktrace 在 windows 下会严重影响性能
+option("stacktrace", {description = "Enable check/assert with stack trace info.", default = false})
+option("spend_time", {description = "Enable spend time.", default = true})
+option("feedback", {description = "Enable send feedback.", default = true})
+option("low_precision", {description = "Enable low precision.", default = false})
+option("log_level", {description = "set log level.", default = 2, values = {1, 2, 3, 4, 5, 6}})
+option("async_log", {description = "Use async log.", default = false})
+option("leak_check", {description = "Enable leak check for test", default = false})
+
+-- 使用 serialize 时，建议使用静态库方式编译，boost serializasion 对 dll 的方式支持不好
+-- windows下如果使用 serialize 且希望使用动态库，需要设置 runtimes 参数为 "MD"
+-- "MT" 方式下，serialize 会挂
+option("serialize", {description = "Enable support serialize object and pickle in python", default = true})
+
+-- 和 hku_utils 编译选项保持一致，以便互相替换
+option("mo", {description = "International language support", default = false})
+-- option("http_client", {description = "use http client", default = true})
+option("http_client_ssl", {description = "enable https support for http client", default = false})
+option("http_client_zip", {description = "enable http support gzip", default = false})
+-- option("node", {description = "enable node reqrep server/client", default = true})
+
+option("ta_lib")
+    add_deps("low_precision")
     set_default(true)
     set_showmenu(true)
     set_category("hikyuu")
-    set_description("Enable sqlite kdata engine.")
-option_end()
-
-option("tdx")
-    set_default(true)
-    set_showmenu(true)
-    set_category("hikyuu")
-    set_description("Enable tdx kdata engine.")
-option_end()
-
-option("stacktrace")
-    set_default(true)
-    set_showmenu(true)
-    set_category("hikyuu")
-    set_description("Enable check/assert with stack trace info.")
-    add_defines("HKU_ENABLE_STACK_TRACE")
-option_end()
-
-option("feedback")
-    set_default(true)
-    set_showmenu(true)
-    set_category("hikyuu")
-    set_description("Enable send feedback.")
+    set_description("Enable ta-lib support.")
+    -- low_precision 时，需禁用，ta-lib不支持输出为 float
+    after_check(function (option)
+      if option:dep("low_precision"):enabled() then
+          cprint('${red}[warning] "low_precision" is enabled, ta-lib will be disabled')
+          option:enable(false)
+      end
+    end)        
 option_end()
 
 
--- project
-set_project("hikyuu")
-
-add_rules("mode.debug", "mode.release")
-if not is_plat("windows") then add_rules("mode.coverage", "mode.asan", "mode.msan", "mode.tsan", "mode.lsan") end
-
--- version
-set_version("1.3.2", {build = "%Y%m%d%H%M"})
-set_configvar("LOG_ACTIVE_LEVEL", 0) -- 激活的日志级别
--- if is_mode("debug") then
---    set_configvar("LOG_ACTIVE_LEVEL", 0)  -- 激活的日志级别
--- else
---    set_configvar("LOG_ACTIVE_LEVEL", 2)  -- 激活的日志级别
--- end
-set_configvar("USE_SPDLOG_LOGGER", 1) -- 是否使用spdlog作为日志输出
-set_configvar("USE_SPDLOG_ASYNC_LOGGER", 0) -- 使用异步的spdlog
-set_configvar("CHECK_ACCESS_BOUND", 1)
-if is_plat("macosx") then
-    set_configvar("SUPPORT_SERIALIZATION", 0)
-else
-    set_configvar("SUPPORT_SERIALIZATION", is_mode("release") and 1 or 0)
+-- SPDLOG_ACTIVE_LEVEL 需要单独加
+local log_level = get_config("log_level")
+if log_level == nil then
+    log_level = 2
 end
+add_defines("SPDLOG_ACTIVE_LEVEL=" .. log_level)
+
+if is_mode("debug") then
+    set_configvar("HKU_DEBUG_MODE", 1)
+else
+    set_configvar("HKU_DEBUG_MODE", 0)
+end
+set_configvar("CHECK_ACCESS_BOUND", 1)
+set_configvar("SUPPORT_SERIALIZATION", get_config("serialize") and 1 or 0)
 set_configvar("SUPPORT_TEXT_ARCHIVE", 0)
 set_configvar("SUPPORT_XML_ARCHIVE", 1)
 set_configvar("SUPPORT_BINARY_ARCHIVE", 1)
-set_configvar("HKU_DISABLE_ASSERT", 0)
 set_configvar("ENABLE_MSVC_LEAK_DETECT", 0)
+set_configvar("HKU_ENABLE_LEAK_DETECT", get_config("leak_check") and 1 or 0)
 set_configvar("HKU_ENABLE_SEND_FEEDBACK", get_config("feedback") and 1 or 0)
 
 set_configvar("HKU_ENABLE_HDF5_KDATA", get_config("hdf5") and 1 or 0)
+set_configvar("HKU_ENABLE_MYSQL", get_config("mysql") and 1 or 0)
 set_configvar("HKU_ENABLE_MYSQL_KDATA", get_config("mysql") and 1 or 0)
+set_configvar("HKU_ENABLE_SQLITE", (get_config("sqlite") or get_config("hdf5")) and 1 or 0)
 set_configvar("HKU_ENABLE_SQLITE_KDATA", get_config("sqlite") and 1 or 0)
 set_configvar("HKU_ENABLE_TDX_KDATA", get_config("tdx") and 1 or 0)
 
-set_warnings("all")
+set_configvar("HKU_USE_LOW_PRECISION", get_config("low_precision") and 1 or 0)
+set_configvar("HKU_ENABLE_TA_LIB", get_config("ta_lib") and 1 or 0)
 
--- set language: C99, c++ standard
-set_languages("cxx17", "c99")
+set_configvar("HKU_SUPPORT_DATETIME", 1)
+set_configvar("HKU_ENABLE_SQLCIPHER", 0)
+set_configvar("HKU_SQL_TRACE", get_config("sql_trace"))
+set_configvar("HKU_ENABLE_INI_PARSER", 1)
+set_configvar("HKU_ENABLE_STACK_TRACE", get_config("stacktrace") and 1 or 0)
+set_configvar("HKU_CLOSE_SPEND_TIME", get_config("spend_time") and 0 or 1)
+set_configvar("HKU_USE_SPDLOG_ASYNC_LOGGER", get_config("async_log") and 1 or 0)
+set_configvar("HKU_LOG_ACTIVE_LEVEL", get_config("log_level"))
+set_configvar("HKU_ENABLE_MO", get_config("mo") and 1 or 0)
+set_configvar("HKU_ENABLE_HTTP_CLIENT", 1)
+set_configvar("HKU_ENABLE_HTTP_CLIENT_SSL", get_config("http_client_ssl") and 1 or 0)
+set_configvar("HKU_ENABLE_HTTP_CLIENT_ZIP", get_config("http_client_zip") and 1 or 0)
+set_configvar("HKU_ENABLE_NODE", 1)
 
-if is_plat("windows") then
-    if is_mode("release") then
-        set_runtimes("MD")
-    else
-        set_runtimes("MDd")
-    end
-end
-
-local boost_version = "1.84.0"
+local boost_version = "1.87.0"
 local hdf5_version = "1.12.2"
-local fmt_version = "10.2.1"
-local flatbuffers_version = "23.5.26"
+local fmt_version = "11.1.3"
+local spdlog_version = "1.15.1"
+local flatbuffers_version = "24.3.25"
+local nng_version = "1.8.0"
+local sqlite_version = "3.48.0+0"
 local mysql_version = "8.0.31"
 if is_plat("windows") or (is_plat("linux", "cross") and is_arch("aarch64", "arm64.*")) then 
     mysql_version = "8.0.21" 
+elseif is_plat("macosx") then
+    mysql_version = "8.0.40"
 end
 
 add_repositories("hikyuu-repo https://github.com/fasiondog/hikyuu_extern_libs.git")
-if is_plat("windows") then
-    if get_config("hdf5") then
-        if is_mode("release") then
-            add_requires("hdf5 " .. hdf5_version)
-        else
-            add_requires("hdf5_D " .. hdf5_version)
-        end
-    end
-    if get_config("mysql") then
-        add_requires("mysql " .. mysql_version)
-    end
-
-elseif is_plat("linux", "cross") then
-    if get_config("hdf5") then
+-- add_repositories("hikyuu-repo https://gitee.com/fasiondog/hikyuu_extern_libs.git")
+ if get_config("hdf5") then
         add_requires("hdf5 " .. hdf5_version, { system = false })
-    end
-    if get_config("mysql") then
-        add_requires("mysql " .. mysql_version, { system = false })
-    end
-  
-elseif is_plat("macosx") then
-    if get_config("hdf5") then
-        add_requires("brew::hdf5")
-    end
-    if get_config("mysql") then
-        add_requires("brew::mysql-client")
-    end
-end
+ end
+ if get_config("mysql") then
+     add_requires("mysql " .. mysql_version, { system = false })
+ end
 
 add_requires("boost " .. boost_version, {
-  system = false,
   debug = is_mode("debug"),
   configs = {
-    shared = false,
+    shared = is_plat("windows"),
+    runtimes = get_config("runtimes"),
     multi = true,
     date_time = true,
-    filesystem = true,
-    serialization = true,
+    filesystem = false,
+    serialization = get_config("serialize"),
     system = false,
     python = false,
+    cmake = false,
   },
 })
 
-add_requires("spdlog", {system = false, configs = {header_only = true, fmt_external = true}})
-add_requireconfs("spdlog.fmt", {override = true, version = fmt_version, configs = {header_only = true}})
-add_requires("sqlite3", {system = false, configs = {shared = true, cxflags = "-fPIC"}})
-add_requires("flatbuffers v" .. flatbuffers_version, {system = false})
-add_requires("nng", {system = false, configs = {cxflags = "-fPIC"}})
+add_requires("fmt " .. fmt_version, {system = false, configs = {header_only = true}})
+add_requires("spdlog " .. spdlog_version, {system = false, configs = {header_only = true, fmt_external = true}})
+add_requireconfs("spdlog.fmt", {override = true, version=fmt_version, system = false, configs = {header_only = true}})
+add_requires("sqlite3 " .. sqlite_version, {configs = {shared = true, safe_mode="2", cxflags = "-fPIC"}})
+add_requires("flatbuffers v" .. flatbuffers_version, {system = false, configs= {runtimes = get_config("runtimes")}})
+add_requires("nng " .. nng_version, {system = false, configs = {NNG_ENABLE_TLS = has_config("http_client_ssl"), cxflags = "-fPIC"}})
 add_requires("nlohmann_json", {system = false})
-add_requires("cpp-httplib", {system = false, configs = {zlib = true, ssl = true}})
-add_requires("zlib", {system = false})
+
+if has_config("http_client_zip") then
+    add_requires("gzip-hpp", {system = false})
+end
+
+if has_config("ta_lib") then
+    add_requires("ta-lib", {system = false})
+end
 
 add_defines("SPDLOG_DISABLE_DEFAULT_LOGGER") -- 禁用 spdlog 默认ogger
 
 set_objectdir("$(buildir)/$(mode)/$(plat)/$(arch)/.objs")
 set_targetdir("$(buildir)/$(mode)/$(plat)/$(arch)/lib")
 
--- modifed to use boost static library, except boost.python, serialization
--- if is_plat("windows") and get_config("kind") == "shared" then 
---     add_defines("BOOST_ALL_DYN_LINK") 
--- end
+-- on windows dll, must use runtimes MD
+if is_plat("windows") and get_config("kind") == "shared" then 
+    set_config("runtimes", "MD")
+    set_runtimes("MD")
+end
 
 -- is release now
 if is_mode("release") then
@@ -205,23 +196,26 @@ if is_plat("windows") then
   end
 end
 
-if not is_plat("windows") then
+if is_plat("linux", "cross", "macosx") then
   -- disable some compiler errors
   add_cxflags("-Wno-error=deprecated-declarations", "-fno-strict-aliasing")
   add_cxflags("-ftemplate-depth=1023", "-pthread")
   add_shflags("-pthread")
   add_ldflags("-pthread")
 end
---
--- add_vectorexts("sse", "sse2", "sse3", "ssse3", "mmx", "avx")
-if not is_plat("cross") and (os.host() == "linux" and is_arch("x86_64", "x64")) then
-  -- fedora或者ubuntu，并且不是交叉编译
-  add_vectorexts("sse", "sse2", "ssse3", "avx", "avx2")
+
+if is_plat("macosx") then
+    add_cxflags("-Wno-deprecated-declarations")
 end
 
+-- if not is_plat("cross") and (os.host() == "linux" and is_arch("x86_64", "x64")) then
+--   -- fedora或者ubuntu，并且不是交叉编译
+--   add_vectorexts("sse", "sse2", "ssse3", "avx", "avx2")
+-- --   add_defines("HKU_ENABLE_SSE2", "HKU_ENABLE_SSE3", "HKU_ENABLE_SSE41", "HKU_ENABLE_AVX", "HKU_ENABLE_AVX2")
+-- end
+
+includes("./copy_dependents.lua")
 includes("./hikyuu_cpp/hikyuu")
 includes("./hikyuu_pywrap")
 includes("./hikyuu_cpp/unit_test")
 includes("./hikyuu_cpp/demo")
-includes("./hikyuu_cpp/hikyuu_server")
-

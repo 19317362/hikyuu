@@ -5,25 +5,26 @@
  *      Author: fasiondog
  */
 
-#include "../../trade_manage/crt/crtTM.h"
+#include "hikyuu/global/sysinfo.h"
+#include "hikyuu/trade_manage/crt/crtTM.h"
+#include "hikyuu/trade_sys/selector/imp/optimal/OptimalSelectorBase.h"
 
 #include "Portfolio.h"
+
+#if HKU_SUPPORT_SERIALIZATION
+BOOST_CLASS_EXPORT(hku::Portfolio)
+#endif
 
 namespace hku {
 
 HKU_API std::ostream& operator<<(std::ostream& os, const Portfolio& pf) {
-    string strip(",\n");
-    string space("  ");
-    os << "Portfolio{\n"
-       << space << pf.name() << strip << space << pf.getParameter() << strip << space
-       << pf.getQuery() << strip << space << pf.getAF() << strip << space << pf.getSE() << strip
-       << space << (pf.getTM() ? pf.getTM()->str() : "TradeManager(NULL)") << strip << "}";
+    os << pf.str();
     return os;
 }
 
 HKU_API std::ostream& operator<<(std::ostream& os, const PortfolioPtr& pf) {
     if (pf) {
-        os << *pf;
+        os << pf->str();
     } else {
         os << "Portfolio(NULL)";
     }
@@ -31,261 +32,404 @@ HKU_API std::ostream& operator<<(std::ostream& os, const PortfolioPtr& pf) {
     return os;
 }
 
-Portfolio::Portfolio()
-: m_name("Portfolio"), m_query(Null<KQuery>()), m_is_ready(false), m_need_calculate(true) {
-    setParam<bool>("trace", false);  // 打印跟踪
+string Portfolio::str() const {
+    std::stringstream os;
+    string strip(",\n");
+    string space("  ");
+    os << "Portfolio{\n"
+       << space << name() << strip << space << getParameter() << strip << space << getQuery()
+       << strip << space << getAF() << strip << space << getSE() << strip << space
+       << (getTM() ? getTM()->str() : "TradeManager(NULL)") << strip << "}";
+    return os.str();
 }
 
-Portfolio::Portfolio(const string& name)
-: m_name(name), m_query(Null<KQuery>()), m_is_ready(false), m_need_calculate(true) {
-    setParam<bool>("trace", false);
+Portfolio::Portfolio() : m_name("Portfolio"), m_query(Null<KQuery>()), m_need_calculate(true) {
+    initParam();
 }
 
-Portfolio::Portfolio(const TradeManagerPtr& tm, const SelectorPtr& se, const AFPtr& af)
-: m_name("Portfolio"),
-  m_tm(tm),
-  m_se(se),
-  m_af(af),
-  m_query(Null<KQuery>()),
-  m_is_ready(false),
-  m_need_calculate(true) {
-    setParam<bool>("trace", false);
+Portfolio::Portfolio(const string& name) : m_name(name) {
+    initParam();
+}
+
+Portfolio::Portfolio(const string& name, const TradeManagerPtr& tm, const SelectorPtr& se,
+                     const AFPtr& af)
+: m_name(name), m_tm(tm), m_se(se), m_af(af), m_query(Null<KQuery>()), m_need_calculate(true) {
+    initParam();
 }
 
 Portfolio::~Portfolio() {}
 
+void Portfolio::initParam() {
+    setParam<int>("adjust_cycle", 1);          // 调仓周期
+    setParam<string>("adjust_mode", "query");  // 调仓模式
+
+    // 延迟至交易日，当调仓日为非交易日时，自动延迟至下一个交易日作为调仓日
+    setParam<bool>("delay_to_trading_day", true);
+
+    setParam<bool>("trace", false);      // 打印跟踪
+    setParam<int>("trace_max_num", 10);  // 打印跟踪时，显示当前持仓证券最大数量
+}
+
+void Portfolio::baseCheckParam(const string& name) const {
+    if ("adjust_mode" == name || "adjust_cycle" == name) {
+        if (!haveParam("adjust_mode") || !haveParam("adjust_cycle")) {
+            // 同时判断两个参数时，可能一个参数还未设定
+            return;
+        }
+        string adjust_mode = getParam<string>("adjust_mode");
+        to_lower(adjust_mode);
+        int adjust_cycle = getParam<int>("adjust_cycle");
+        if ("query" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1);
+        } else if ("day" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1);
+        } else if ("week" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1 && adjust_cycle <= 5);
+        } else if ("month" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1 && adjust_cycle <= 31);
+        } else if ("quarter" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1 && adjust_cycle <= 92);
+        } else if ("year" == adjust_mode) {
+            HKU_ASSERT(adjust_cycle >= 1 && adjust_cycle <= 366);
+        } else {
+            HKU_THROW("Invalid adjust_mode: {}!", adjust_mode);
+        }
+
+    } else if ("trace" == name) {
+        if (getParam<bool>("trace") && pythonInJupyter()) {
+            HKU_THROW("You can't trace in jupyter!");
+        }
+    }
+}
+
+void Portfolio::paramChanged() {
+    m_need_calculate = true;
+}
+
 void Portfolio::reset() {
-    m_is_ready = false;
-    m_pro_sys_list.clear();
-    m_real_sys_list.clear();
-    m_running_sys_set.clear();
-    m_running_sys_list.clear();
-    m_tmp_selected_list_on_open.clear();
-    m_tmp_selected_list_on_close.clear();
-    m_tmp_will_remove_sys.clear();
     if (m_tm)
         m_tm->reset();
-    if (m_shadow_tm)
-        m_shadow_tm->reset();
+    if (m_cash_tm)
+        m_cash_tm->reset();
     if (m_se)
         m_se->reset();
     if (m_af)
         m_af->reset();
+    m_need_calculate = true;
+    m_real_sys_list.clear();
+    m_running_sys_set.clear();
+    _reset();
 }
 
-PortfolioPtr Portfolio::clone() {
-    PortfolioPtr p = make_shared<Portfolio>();
+PortfolioPtr Portfolio::clone() const {
+    PortfolioPtr p = _clone();
     p->m_params = m_params;
     p->m_name = m_name;
     p->m_query = m_query;
-    p->m_pro_sys_list = m_pro_sys_list;
-    p->m_real_sys_list = m_real_sys_list;
-    p->m_is_ready = m_is_ready;
-    p->m_need_calculate = m_need_calculate;
+    p->m_need_calculate = true;
     if (m_se)
         p->m_se = m_se->clone();
     if (m_af)
         p->m_af = m_af->clone();
     if (m_tm)
         p->m_tm = m_tm->clone();
-    if (m_shadow_tm)
-        p->m_shadow_tm = m_shadow_tm->clone();
+    if (m_cash_tm)
+        p->m_cash_tm = m_cash_tm->clone();
     return p;
 }
 
-bool Portfolio::_readyForRun() {
-    if (!m_se) {
-        HKU_WARN("m_se is null!");
-        m_is_ready = false;
-        return false;
-    }
-
-    if (!m_tm) {
-        HKU_WARN("m_tm is null!");
-        m_is_ready = false;
-        return false;
-    }
-
-    if (!m_af) {
-        HKU_WARN("m_am is null!");
-        m_is_ready = false;
-        return false;
-    }
-
-    // se算法和af算法不匹配时，给出告警
-    HKU_WARN_IF(!m_se->isMatchAF(m_af), "The current SE and AF do not match!");
-
+void Portfolio::readyForRun() {
+    HKU_CHECK(m_se, "m_se is null!");
+    HKU_CHECK(m_tm, "m_tm is null!");
     reset();
-
-    // 将影子账户指定给资产分配器
-    m_shadow_tm = m_tm->clone();
-    m_af->setTM(m_tm);
-    m_af->setShadowTM(m_shadow_tm);
-
-    // 为资金分配器设置关联查询条件
-    m_af->setQuery(m_query);
-
-    // 从 se 获取原型系统列表
-    m_pro_sys_list = m_se->getProtoSystemList();
-
-    // 获取所有备选子系统，为无关联账户的子系统分配子账号，对所有子系统做好启动准备
-    TMPtr pro_tm = crtTM(m_tm->initDatetime(), 0.0, m_tm->costFunc(), "TM_SUB");
-    size_t total = m_pro_sys_list.size();
-    for (size_t i = 0; i < total; i++) {
-        SystemPtr& pro_sys = m_pro_sys_list[i];
-        SystemPtr sys = pro_sys->clone();
-        m_real_sys_list.emplace_back(sys);
-
-        // 如果原型子系统没有关联账户，则为其创建一个和总资金金额相同的账户，以便能够运行
-        if (!pro_sys->getTM()) {
-            pro_sys->setTM(m_tm->clone());
-        }
-
-        // 为内部实际执行的系统创建初始资金为0的子账户
-        sys->setTM(pro_tm->clone());
-        sys->getTM()->name(fmt::format("TM_SUB{}", i));
-        sys->name(fmt::format("PF_Real_{}_{}", i, sys->name()));
-
-        HKU_CHECK(sys->readyForRun() && pro_sys->readyForRun(),
-                  "Exist invalid system, it could not ready for run!");
-        KData k = sys->getStock().getKData(m_query);
-        sys->setTO(k);
-        pro_sys->setTO(k);
-    }
-
-    // 告知 se 当前实际运行的系统列表
-    m_se->calculate(m_real_sys_list, m_query);
-
-    m_is_ready = true;
-    return true;
+    _readyForRun();
 }
 
-void Portfolio::_runMoment(const Datetime& date) {
+void Portfolio::runMoment(const Datetime& date, const Datetime& nextCycle, bool adjust) {
     // 当前日期小于账户建立日期，直接忽略
-    HKU_IF_RETURN(date < m_shadow_tm->initDatetime(), void());
+    HKU_IF_RETURN(date < m_tm->initDatetime(), void());
 
-    _runMomentOnOpen(date);
-    _runMomentOnClose(date);
-
-    // 释放掉临时数据占用的内存
-    m_running_sys_set = std::unordered_set<System*>();
-    m_running_sys_list = std::list<SYSPtr>();
-    m_tmp_selected_list_on_open = SystemList();
-    m_tmp_selected_list_on_close = SystemList();
-    m_tmp_will_remove_sys = SystemList();
-}
-
-void Portfolio::_runMomentOnOpen(const Datetime& date) {
-    // 从选股策略获取当前选中的系统列表
-    m_tmp_selected_list_on_open = m_se->getSelectedOnOpen(date);
-
-    // 资产分配算法调整各子系统资产分配，忽略上一周期收盘时选中的系统
-    m_af->adjustFunds(date, m_tmp_selected_list_on_open, m_running_sys_list,
-                      m_tmp_selected_list_on_close);
-
-    // 由于系统的交易指令可能被延迟执行，需要保存并判断
-    // 遍历当前运行中的子系统，如果已没有分配资金和持仓，则放入待移除列表
-    m_tmp_will_remove_sys.clear();
-    int precision = m_shadow_tm->getParam<int>("precision");
-    for (auto& running_sys : m_running_sys_list) {
-        Stock stock = running_sys->getStock();
-        TMPtr sub_tm = running_sys->getTM();
-        PositionRecord position = sub_tm->getPosition(date, stock);
-        price_t cash = sub_tm->cash(date, m_query.kType());
-
-        // 已没有持仓且没有现金，则放入待移除列表
-        if (position.number == 0 && cash <= precision) {
-            if (cash != 0) {
-                sub_tm->checkout(date, cash);
-                m_shadow_tm->checkin(date, cash);
-            }
-            m_tmp_will_remove_sys.push_back(running_sys);
-        }
+    bool trace = getParam<bool>("trace");
+    HKU_INFO_IF(trace, "{} ===========================================================", date);
+    if (trace && adjust) {
+        HKU_INFO("****************************************************");
+        HKU_INFO("**                                                **");
+        HKU_INFO("**  [PF] Position adjustment will be made today.  **");
+        HKU_INFO("**                                                **");
+        HKU_INFO("****************************************************");
     }
+    HKU_INFO_IF(trace, "[PF] current running system size: {}", m_running_sys_set.size());
 
-    // 依据待移除列表将系统从运行中系统列表里删除
-    for (auto& sub_sys : m_tmp_will_remove_sys) {
-        m_running_sys_list.remove(sub_sys);
-        m_running_sys_set.erase(sub_sys.get());
-    }
+    // 开盘前，调整账户权息
+    m_tm->updateWithWeight(date);
 
-    // 遍历本次选择的系统列表，如果存在分配资金且不在运行中列表内，则加入运行列表
-    for (auto& sub_sys : m_tmp_selected_list_on_open) {
-        price_t cash = sub_sys->getTM()->cash(date, m_query.kType());
-        if (cash > 0.0 && m_running_sys_set.find(sub_sys.get()) == m_running_sys_set.end()) {
-            m_running_sys_list.push_back(sub_sys);
-            m_running_sys_set.insert(sub_sys.get());
-        }
-    }
+    _runMoment(date, nextCycle, adjust);
 
-    // 在开盘时执行所有运行中的非延迟交易系统系统
-    for (auto& sub_sys : m_running_sys_list) {
-        if (!sub_sys->getParam<bool>("buy_delay")) {
-            auto tr = sub_sys->runMoment(date);
-            if (!tr.isNull()) {
-                m_tm->addTradeRecord(tr);
-            }
-        }
-    }
-}
+    //----------------------------------------------------------------------
+    // 跟踪打印各运行中子系统持仓情况
+    //----------------------------------------------------------------------
+    traceMomentTM(date);
 
-void Portfolio::_runMomentOnClose(const Datetime& date) {
-    // 从选股策略获取当前选中的系统列表
-    m_tmp_selected_list_on_close = m_se->getSelectedOnClose(date);
-
-    // 资产分配算法调整各子系统资产分配，忽略开盘时选中的系统
-    m_af->adjustFunds(date, m_tmp_selected_list_on_close, m_running_sys_list,
-                      m_tmp_selected_list_on_open);
-    if (getParam<bool>("trace") &&
-        (!m_tmp_selected_list_on_open.empty() || !m_tmp_selected_list_on_close.empty())) {
-        HKU_INFO("{} ===========================================================", date);
-        for (auto& sys : m_tmp_selected_list_on_open) {
-            HKU_INFO("select on open: {}, cash: {}", sys->getTO().getStock(),
-                     sys->getTM()->cash(date, m_query.kType()));
-        }
-        for (auto& sys : m_tmp_selected_list_on_close) {
-            HKU_INFO("select on close: {}, cash: {}", sys->getTO().getStock(),
-                     sys->getTM()->cash(date, m_query.kType()));
-        }
-    }
-
-    // 如果选中的系统不在已有列表中，且账户已经被分配了资金，则将其加入运行系统，并执行
-    for (auto& sys : m_tmp_selected_list_on_close) {
-        if (m_running_sys_set.find(sys.get()) == m_running_sys_set.end()) {
-            TMPtr tm = sys->getTM();
-            if (tm->cash(date, m_query.kType()) > 0.0) {
-                m_running_sys_list.push_back(sys);
-                m_running_sys_set.insert(sys.get());
-            }
-        }
-    }
-
-    // 执行所有非延迟运行中系统
-    for (auto& sub_sys : m_running_sys_list) {
-        if (sub_sys->getParam<bool>("buy_delay")) {
-            auto tr = sub_sys->runMoment(date);
-            if (!tr.isNull()) {
-                m_tm->addTradeRecord(tr);
-            }
-        }
+    // 跟踪打印当前账户资产
+    if (trace) {
+        FundsRecord funds = m_tm->getFunds(date, m_query.kType());
+        HKU_INFO("[PF] total asset: {:.2f}, current cash: {:<.2f}, market value: {:<.2f}",
+                 funds.total_assets(), funds.cash, funds.market_value);
     }
 }
 
 void Portfolio::run(const KQuery& query, bool force) {
+    SPEND_TIME(Portfolio_run);
+
+    int adjust_cycle = getParam<int>("adjust_cycle");
+    string mode = getParam<string>("adjust_mode");
+    bool delay_to_trading_day = getParam<bool>("delay_to_trading_day");
+    to_lower(mode);
+    if (mode != "query") {
+        HKU_CHECK(query.kType() == KQuery::DAY,
+                  R"(The kType of query({}) must be DAY when adjust_mode is not "query"!)",
+                  query.kType());
+    }
+
     setQuery(query);
+
     if (force) {
         m_need_calculate = true;
     }
     HKU_IF_RETURN(!m_need_calculate, void());
-    HKU_ERROR_IF_RETURN(!_readyForRun(), void(),
-                        "readyForRun fails, check to see if a valid TradeManager, Selector, or "
-                        "AllocateFunds instance have been specified.");
+
+    readyForRun();
+
+    if (m_real_sys_list.empty()) {
+        HKU_WARN("There is no system in portfolio!");
+        m_need_calculate = true;
+        return;
+    }
 
     DatetimeList datelist = StockManager::instance().getTradingCalendar(query);
-    for (auto& date : datelist) {
-        _runMoment(date);
+    HKU_IF_RETURN(datelist.empty(), void());
+
+    if ("query" == mode || "day" == mode) {
+        size_t cur_adjust_ix = 0;
+        Datetime cur_cycle_end;
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            bool adjust = false;
+            if (i == cur_adjust_ix) {
+                adjust = true;
+                cur_adjust_ix += adjust_cycle;
+                cur_cycle_end =
+                  cur_adjust_ix < total ? datelist[cur_adjust_ix] : datelist.back() + Seconds(1);
+            }
+
+            const auto& date = datelist[i];
+            runMoment(date, cur_cycle_end, adjust);
+        }
+
+    } else if (delay_to_trading_day) {
+        _runOnModeDelayToTradingDay(datelist, adjust_cycle, mode);
+    } else {
+        _runOnMode(datelist, adjust_cycle, mode);
     }
+
     m_need_calculate = false;
+}
+
+void Portfolio::_runOnMode(const DatetimeList& datelist, int adjust_cycle, const string& mode) {
+    if ("week" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextWeek();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            bool adjust = (date.dayOfWeek() == adjust_cycle);
+            if (adjust) {
+                cur_cycle_end = date.nextWeek();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+            runMoment(date, cur_cycle_end, adjust);
+        }
+    } else if ("month" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextMonth();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            bool adjust = (date.day() == adjust_cycle);
+            if (adjust) {
+                cur_cycle_end = date.nextMonth();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+            runMoment(date, cur_cycle_end, adjust);
+        }
+    } else if ("quarter" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextQuarter();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            bool adjust = (date.day() == adjust_cycle);
+            if (adjust) {
+                cur_cycle_end = date.nextQuarter();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+            runMoment(date, cur_cycle_end, adjust);
+        }
+    } else if ("year" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextYear();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            bool adjust = (date.dayOfYear() == adjust_cycle);
+            if (adjust) {
+                cur_cycle_end = date.nextYear();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+            runMoment(date, cur_cycle_end, adjust);
+        }
+    }
+}
+
+void Portfolio::_runOnModeDelayToTradingDay(const DatetimeList& datelist, int adjust_cycle,
+                                            const string& mode) {
+    std::set<Datetime> adjust_date_set;
+    if ("week" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextWeek();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            Datetime adjust_date = date.startOfWeek() + Days(adjust_cycle - 1);
+            bool adjust = false;
+            if (date == adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            } else if (adjust_date_set.find(adjust_date) == adjust_date_set.end() &&
+                       date > adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            }
+
+            if (adjust) {
+                cur_cycle_end = date.nextWeek();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+
+            runMoment(date, cur_cycle_end, adjust);
+        }
+
+    } else if ("month" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextMonth();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            Datetime adjust_date = date.startOfMonth() + Days(adjust_cycle - 1);
+            bool adjust = false;
+            if (date == adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            } else if (adjust_date_set.find(adjust_date) == adjust_date_set.end() &&
+                       date > adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            }
+
+            if (adjust) {
+                cur_cycle_end = date.nextMonth();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+
+            runMoment(date, cur_cycle_end, adjust);
+        }
+
+    } else if ("quarter" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextQuarter();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            Datetime adjust_date = date.startOfQuarter() + Days(adjust_cycle - 1);
+            bool adjust = false;
+            if (date == adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            } else if (adjust_date_set.find(adjust_date) == adjust_date_set.end() &&
+                       date > adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            }
+
+            if (adjust) {
+                cur_cycle_end = date.nextQuarter();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+
+            runMoment(date, cur_cycle_end, adjust);
+        }
+
+    } else if ("year" == mode) {
+        Datetime cur_cycle_end = datelist.front().nextYear();
+        for (size_t i = 0, total = datelist.size(); i < total; i++) {
+            const auto& date = datelist[i];
+            Datetime adjust_date = date.startOfYear() + Days(adjust_cycle - 1);
+            bool adjust = false;
+            if (date == adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            } else if (adjust_date_set.find(adjust_date) == adjust_date_set.end() &&
+                       date > adjust_date) {
+                adjust = true;
+                adjust_date_set.emplace(adjust_date);
+            }
+
+            if (adjust) {
+                cur_cycle_end = date.nextYear();
+            }
+            if (cur_cycle_end >= datelist.back()) {
+                cur_cycle_end = datelist.back() + Seconds(1);
+            }
+
+            runMoment(date, cur_cycle_end, adjust);
+        }
+    }
+}
+
+void Portfolio::traceMomentTM(const Datetime& date) {
+    HKU_IF_RETURN(!getParam<bool>("trace") || m_running_sys_set.empty(), void());
+
+    //----------------------------------------------------------------------
+    // 跟踪打印持仓情况
+    //----------------------------------------------------------------------
+    // clang-format off
+    HKU_INFO("+------------+------------+------------+--------------+--------------+-------------+-------------+");
+    HKU_INFO("| code       | name       | position   | market value | remain cash  | open price  | close price  |");
+    HKU_INFO("+------------+------------+------------+--------------+--------------+-------------+-------------+");
+    // clang-format on
+
+    size_t count = 0;
+    for (const auto& sys : m_running_sys_set) {
+        Stock stk = sys->getStock();
+        auto funds = sys->getTM()->getFunds(date, m_query.kType());
+        size_t position = sys->getTM()->getHoldNumber(date, stk);
+        KRecord krecord = stk.getKRecord(date, m_query.kType());
+        auto stk_name = stk.name();
+        HKU_INFO("| {:<11}| {:<11}| {:<11}| {:<13.2f}| {:<13.2f}| {:<12.2f}| {:<12.2f}|",
+                 stk.market_code(), stk_name, position, funds.market_value, funds.cash,
+                 krecord.openPrice, krecord.closePrice);
+        // clang-format off
+        HKU_INFO("+------------+------------+------------+--------------+--------------+-------------+-------------+");
+        count++;
+        int trace_max_num = getParam<int>("trace_max_num");
+        if (count >= trace_max_num) {
+            if (m_running_sys_set.size() > trace_max_num) {
+                HKU_INFO("+ ... ... more                                                                                   +");
+                HKU_INFO("+------------+------------+------------+--------------+--------------+-------------+-------------+");
+            }
+            break;
+        }
+        // clang-format on
+    }
 }
 
 } /* namespace hku */

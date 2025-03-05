@@ -21,10 +21,6 @@ IDropna::IDropna() : IndicatorImp("DROPNA", 1) {
 
 IDropna::~IDropna() {}
 
-bool IDropna::check() {
-    return true;
-}
-
 void IDropna::_calculate(const Indicator& ind) {
     // ref_date_list 参数会影响 IndicatorImp 全局，勿随意修改
     size_t total = ind.size();
@@ -37,11 +33,12 @@ void IDropna::_calculate(const Indicator& ind) {
 
     m_result_num = ind.getResultNumber();
     size_t row_len = total - ind.discard();
-    price_t* buf = new price_t[m_result_num * row_len];
-    if (!buf) {
-        HKU_ERROR("Memory allocation failed!");
-        return;
-    }
+
+#if CPP_STANDARD >= CPP_STANDARD_17
+    std::unique_ptr<price_t[]> buf = std::make_unique<price_t[]>(m_result_num * row_len);
+#else
+    std::unique_ptr<price_t[]> buf(new price_t[m_result_num * row_len]);
+#endif
 
     DatetimeList dates;
     size_t pos = 0;
@@ -66,13 +63,12 @@ void IDropna::_calculate(const Indicator& ind) {
     _readyBuffer(pos / m_result_num, m_result_num);
 
     for (size_t r = 0; r < m_result_num; r++) {
+        auto* dst = this->data(r);
         int start = r * m_result_num;
         for (size_t i = 0; i < pos; i++) {
-            _set(buf[start + i], i, r);
+            dst[i] = buf[start + i];
         }
     }
-
-    delete[] buf;
 
     m_discard = 0;
     setParam<DatetimeList>("align_date_list", dates);

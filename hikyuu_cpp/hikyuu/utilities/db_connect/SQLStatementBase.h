@@ -21,7 +21,7 @@ namespace hku {
 class DBConnectBase;
 
 /** @ingroup DBConnect */
-typedef shared_ptr<DBConnectBase> DBConnectPtr;
+typedef std::shared_ptr<DBConnectBase> DBConnectPtr;
 
 /** @ingroup DBConnect */
 class null_blob_exception : public exception {
@@ -34,19 +34,19 @@ public:
  * SQL Statement 基类
  * @ingroup DBConnect
  */
-class HKU_API SQLStatementBase {
+class HKU_UTILS_API SQLStatementBase {
 public:
     /**
      * 构造函数
      * @param driver 数据库连接
      * @param sql_statement SQL语句
      */
-    SQLStatementBase(DBConnectBase *driver, const string &sql_statement);
+    SQLStatementBase(DBConnectBase *driver, const std::string &sql_statement);
 
     virtual ~SQLStatementBase() = default;
 
     /** 获取构建时传入的表达式SQL语句 */
-    const string &getSqlString() const;
+    const std::string &getSqlString() const;
 
     /** 获取数据驱动 */
     DBConnectBase *getConnect() const;
@@ -80,11 +80,8 @@ public:
 
     /**
      * 将 item 的值绑定至 idx 指定的 SQL 参数中
-     * @param idx sql参数序号
-     * @param item 二进制数据起始指针
-     * @param len 二进制数据长度
      */
-    void bindBlob(int idx, const char *item, size_t len);
+    void bindBlob(int idx, const std::vector<char> &time);
 
     /** 将 item 的值绑定至 idx 指定的 SQL 参数中 */
     template <typename T>
@@ -93,6 +90,8 @@ public:
     /** 将 item 的值绑定至 idx 指定的 SQL 参数中 */
     template <typename T>
     typename std::enable_if<!std::numeric_limits<T>::is_integer>::type bind(int idx, const T &item);
+
+    void bind(int idx, const std::vector<char> &item);
 
     /** 将 item 的值绑定至 idx 指定的 SQL 参数中 */
     template <typename T, typename... Args>
@@ -115,6 +114,8 @@ public:
 
     /** 获取 idx 指定的数据至 item */
     void getColumn(int idx, Datetime &item);
+
+    void getColumn(int idx, std::vector<char> &);
 
     /** 获取 idx 指定的数据至 item */
     template <typename T>
@@ -142,7 +143,7 @@ public:
     virtual void sub_bindText(int idx, const std::string &item) = 0;   ///< 子类接口 @see bind
     virtual void sub_bindText(int idx, const char *item, size_t len) = 0;  ///< 子类接口 @see bind
     virtual void sub_bindBlob(int idx, const std::string &item) = 0;  ///< 子类接口 @see bind
-    virtual void sub_bindBlob(int idx, const char *item, size_t len) = 0;  ///< 子类接口 @see bind
+    virtual void sub_bindBlob(int idx, const std::vector<char> &item) = 0;  ///< 子类接口 @see bind
 
     virtual int sub_getNumColumns() const = 0;                  ///< 子类接口 @see getNumColumns
     virtual void sub_getColumnAsInt64(int idx, int64_t &) = 0;  ///< 子类接口 @see getColumn
@@ -150,6 +151,8 @@ public:
     virtual void sub_getColumnAsDatetime(int idx, Datetime &) = 0;  ///< 子类接口 @see getColumn
     virtual void sub_getColumnAsText(int idx, std::string &) = 0;   ///< 子类接口 @see getColumn
     virtual void sub_getColumnAsBlob(int idx, std::string &) = 0;   ///< 子类接口 @see getColumn
+    virtual void sub_getColumnAsBlob(int idx,
+                                     std::vector<char> &) = 0;  ///< 子类接口 @see getColumn
 
 private:
     SQLStatementBase() = delete;
@@ -160,7 +163,7 @@ protected:
 };
 
 /** @ingroup DBConnect */
-typedef shared_ptr<SQLStatementBase> SQLStatementPtr;
+typedef std::shared_ptr<SQLStatementBase> SQLStatementPtr;
 
 inline SQLStatementBase ::SQLStatementBase(DBConnectBase *driver, const std::string &sql_statement)
 : m_driver(driver), m_sql_string(sql_statement) {
@@ -180,7 +183,7 @@ inline void SQLStatementBase::bind(int idx, float item) {
 }
 
 inline void SQLStatementBase::exec() {
-#ifdef HKU_SQL_TRACE
+#if HKU_SQL_TRACE
     HKU_DEBUG(m_sql_string);
 #endif
     sub_exec();
@@ -210,8 +213,8 @@ inline void SQLStatementBase::bindBlob(int idx, const std::string &item) {
     sub_bindBlob(idx, item);
 }
 
-inline void SQLStatementBase::bindBlob(int idx, const char *item, size_t len) {
-    sub_bindBlob(idx, item, len);
+inline void SQLStatementBase::bindBlob(int idx, const std::vector<char> &item) {
+    sub_bindBlob(idx, item);
 }
 
 inline uint64_t SQLStatementBase::getLastRowid() {
@@ -240,6 +243,10 @@ inline void SQLStatementBase::getColumn(int idx, std::string &item) {
     sub_getColumnAsText(idx, item);
 }
 
+inline void SQLStatementBase::bind(int idx, const std::vector<char> &item) {
+    sub_bindBlob(idx, item);
+}
+
 template <typename T>
 typename std::enable_if<std::numeric_limits<T>::is_integer>::type SQLStatementBase::bind(
   int idx, const T &item) {
@@ -263,10 +270,14 @@ typename std::enable_if<std::numeric_limits<T>::is_integer>::type SQLStatementBa
     item = (T)temp;
 }
 
+inline void SQLStatementBase::getColumn(int idx, std::vector<char> &item) {
+    sub_getColumnAsBlob(idx, item);
+}
+
 template <typename T>
 typename std::enable_if<!std::numeric_limits<T>::is_integer>::type SQLStatementBase::getColumn(
   int idx, T &item) {
-    string tmp;
+    std::string tmp;
     try {
         sub_getColumnAsBlob(idx, tmp);
     } catch (null_blob_exception &) {

@@ -19,10 +19,6 @@ ISin::ISin() : IndicatorImp("SIN", 1) {}
 
 ISin::~ISin() {}
 
-bool ISin::check() {
-    return true;
-}
-
 void ISin::_calculate(const Indicator& data) {
     size_t total = data.size();
     m_discard = data.discard();
@@ -31,8 +27,10 @@ void ISin::_calculate(const Indicator& data) {
         return;
     }
 
+    auto const* src = data.data();
+    auto* dst = this->data();
     for (size_t i = m_discard; i < total; ++i) {
-        _set(std::sin(data[i]), i);
+        dst[i] = std::sin(src[i]);
     }
 }
 

@@ -16,6 +16,7 @@ class PyStoplossBase : public StoplossBase {
 
 public:
     using StoplossBase::StoplossBase;
+    PyStoplossBase(const StoplossBase& base) : StoplossBase(base) {}
 
     void _calculate() override {
         PYBIND11_OVERLOAD_PURE(void, StoplossBase, _calculate, );
@@ -36,7 +37,7 @@ public:
 };
 
 void export_Stoploss(py::module& m) {
-    py::class_<StoplossBase, StoplossPtr, PyStoplossBase>(m, "StoplossBase",
+    py::class_<StoplossBase, StoplossPtr, PyStoplossBase>(m, "StoplossBase", py::dynamic_attr(),
                                                           R"(止损/止赢算法基类
 自定义止损/止赢策略接口：
 
@@ -44,6 +45,7 @@ void export_Stoploss(py::module& m) {
     - _clone : 【必须】克隆接口
     - _reset : 【可选】重载私有变量)")
       .def(py::init<>())
+      .def(py::init<const StoplossBase&>())
       .def(py::init<const string&>(), R"(初始化构造函数
         
     :param str name: 名称)")
@@ -103,15 +105,14 @@ void export_Stoploss(py::module& m) {
     :param float p: 百分比(0,1]
     :return: 止损/止赢策略实例)");
 
-    m.def("ST_Indicator", ST_Indicator, py::arg("op"), py::arg("kpart") = "CLOSE",
-          R"(ST_Indicator(op[, kpart="CLOSE"])
+    m.def("ST_Indicator", ST_Indicator, py::arg("ind"),
+          R"(ST_Indicator(ind)
 
     使用技术指标作为止损价。如使用10日EMA作为止损：::
 
-        ST_Indicator(OP(EMA(n=10)))
+        ST_Indicator(EMA(CLOSE(), n=10))
 
-    :param Indicator op:
-    :param string kpart: KDATA|OPEN|HIGH|LOW|CLOSE|AMO|VOL
+    :param Indicator ind:
     :return: 止损/止赢策略实例)");
 
     m.def("ST_Saftyloss", ST_Saftyloss, py::arg("n1") = 10, py::arg("n2") = 3, py::arg("p") = 2.0,

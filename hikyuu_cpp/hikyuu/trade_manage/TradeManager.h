@@ -19,12 +19,6 @@
 #include "OrderBrokerBase.h"
 #include "crt/TC_Zero.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/map.hpp>
-#include <boost/serialization/vector.hpp>
-#include <boost/serialization/list.hpp>
-#endif
-
 namespace hku {
 
 /**
@@ -42,8 +36,9 @@ class HKU_API TradeManager : public TradeManagerBase {
     // PARAMETER_SUPPORT
 
 public:
-    TradeManager(const Datetime& datetime = Datetime(199001010000LL), price_t initcash = 100000.0,
-                 const TradeCostPtr& costfunc = TC_Zero(), const string& name = "SYS");
+    explicit TradeManager(const Datetime& datetime = Datetime(199001010000LL),
+                          price_t initcash = 100000.0, const TradeCostPtr& costfunc = TC_Zero(),
+                          const string& name = "SYS");
     virtual ~TradeManager();
 
     /** 复位，清空交易、持仓记录 */
@@ -342,30 +337,21 @@ public:
                                  KQuery::KType ktype = KQuery::DAY) override;
 
     /**
-     * 获取资产净值曲线，含借入的资产
-     * @param dates 日期列表，根据该日期列表获取其对应的资产净值曲线
-     * @param ktype K线类型，必须与日期列表匹配，默认KQuery::DAY
-     * @return 资产净值列表
-     */
-    virtual PriceList getFundsCurve(const DatetimeList& dates,
-                                    KQuery::KType ktype = KQuery::DAY) override;
-
-    /**
-     * 获取收益曲线，即扣除历次存入资金后的资产净值曲线
-     * @param dates 日期列表，根据该日期列表获取其对应的收益曲线，应为递增顺序
-     * @param ktype K线类型，必须与日期列表匹配，默认为KQuery::DAY
-     * @return 收益曲线
-     */
-    virtual PriceList getProfitCurve(const DatetimeList& dates,
-                                     KQuery::KType ktype = KQuery::DAY) override;
-
-    /**
      * 直接加入交易记录
      * @note 如果加入初始化账户记录，将清除全部已有交易及持仓记录
      * @param tr 待加入的交易记录
      * @return bool true 成功 | false 失败
      */
     virtual bool addTradeRecord(const TradeRecord& tr) override;
+
+    /**
+     * 直接加入持仓记录
+     * @note 特殊用途构建初始持仓，可能引起混乱
+     * @param pr 持仓记录
+     * @return true 成功
+     * @return false 失败
+     */
+    virtual bool addPosition(const PositionRecord& pr) override;
 
     /** 字符串输出 */
     virtual string str() const override;

@@ -38,12 +38,11 @@ void export_io_redirect(py::module& m);
 
 void export_data_driver_main(py::module& m);
 void export_indicator_main(py::module& m);
-void export_instance_main(py::module& m);
 void export_SystemPart(py::module& m);
 void export_trade_manage_main(py::module& m);
 void export_trade_sys_main(py::module& m);
 void export_global_main(py::module& m);
-void export_analysis(py::module& m);
+void export_analysis_main(py::module& m);
 
 void export_StrategeContext(py::module& m);
 void export_strategy_main(py::module& m);
@@ -58,10 +57,22 @@ PYBIND11_MODULE(core310, m) {
 PYBIND11_MODULE(core311, m) {
 #elif PY_MINOR_VERSION == 12
 PYBIND11_MODULE(core312, m) {
+#elif PY_MINOR_VERSION == 13
+PYBIND11_MODULE(core313, m) {
 #else
 PYBIND11_MODULE(core, m) {
 #endif
+
+    HKU_INFO("current python version: {}", PY_VERSION);
+
     py::register_exception<hku::exception>(m, "HKUException");
+
+    // 设置系统运行状态
+    setRunningInPython(true);
+
+#if HKU_ENABLE_SEND_FEEDBACK
+    sendPythonVersionFeedBack(PY_MAJOR_VERSION, PY_MINOR_VERSION, PY_MICRO_VERSION);
+#endif
 
     export_bind_stl(m);
     export_DataType(m);
@@ -87,17 +98,19 @@ PYBIND11_MODULE(core, m) {
 
     export_data_driver_main(m);
     export_indicator_main(m);
-    export_instance_main(m);
 
     export_SystemPart(m);
     export_trade_manage_main(m);
     export_trade_sys_main(m);  // must after export_trade_manage_main
 
-    export_analysis(m);
+    export_analysis_main(m);
     export_strategy_main(m);
 
     export_global_main(m);
     export_io_redirect(m);
+
+    m.def("set_python_in_jupyter", setPythonInJupyter);
+    m.def("set_python_in_interactive", setPythonInInteractive);
 
     m.def("close_spend_time", close_spend_time, "全局关闭 c++ 部分耗时打印");
     m.def("open_spend_time", close_spend_time, "全局开启 c++ 部分耗时打印");
@@ -110,6 +123,9 @@ PYBIND11_MODULE(core, m) {
         :rtype: str)");
 
     m.def("get_version_with_build", getVersionWithBuild);
+    m.def("get_version_git", getVersionWithGit);
+    m.def("get_last_version", getLatestVersion);
+    m.def("can_upgrade", CanUpgrade);
 
     m.def("get_stock", getStock,
           R"(get_stock(market_code)
@@ -123,14 +139,23 @@ PYBIND11_MODULE(core, m) {
     int64_t null_int64 = Null<int64_t>();
     Datetime null_date = Null<Datetime>();
 
+    m.def("get_block", getBlock, R"(get_block(category: str, name: str)
+    
+    获取预定义板块
+
+    :param str category: 板块分类
+    :param str name: 板块名称
+    :rtype: Block)");
+
     m.def("get_kdata", py::overload_cast<const string&, const KQuery&>(getKData));
 
-    m.def("get_kdata",
-          py::overload_cast<const string&, int64_t, int64_t, KQuery::KType, KQuery::RecoverType>(
-            getKData),
-          py::arg("market_code"), py::arg("start") = 0, py::arg("end") = null_int64,
-          py::arg("ktype") = KQuery::DAY, py::arg("recover_type") = KQuery::NO_RECOVER,
-          R"(根据证券代码及起止位置获取 [start, end) 范围的 K 线数据
+    m.def(
+      "get_kdata",
+      py::overload_cast<const string&, int64_t, int64_t, const KQuery::KType&, KQuery::RecoverType>(
+        getKData),
+      py::arg("market_code"), py::arg("start") = 0, py::arg("end") = null_int64,
+      py::arg("ktype") = KQuery::DAY, py::arg("recover_type") = KQuery::NO_RECOVER,
+      R"(根据证券代码及起止位置获取 [start, end) 范围的 K 线数据
 
     :param str market_code: 证券代码，如: 'sh000001'
     :param int start: 起始索引
@@ -139,7 +164,7 @@ PYBIND11_MODULE(core, m) {
     :param Query.RecoverType recover_type: 复权类型)");
 
     m.def("get_kdata",
-          py::overload_cast<const string&, const Datetime&, const Datetime&, KQuery::KType,
+          py::overload_cast<const string&, const Datetime&, const Datetime&, const KQuery::KType&,
                             KQuery::RecoverType>(getKData),
           py::arg("market_code"), py::arg("start") = Datetime::min(), py::arg("end") = null_date,
           py::arg("ktype") = KQuery::DAY, py::arg("recover_type") = KQuery::NO_RECOVER,

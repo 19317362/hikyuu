@@ -21,8 +21,10 @@ IRocr::IRocr() : IndicatorImp("ROCR", 1) {
 
 IRocr::~IRocr() {}
 
-bool IRocr::check() {
-    return getParam<int>("n") >= 0;
+void IRocr::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
 }
 
 void IRocr::_calculate(const Indicator& ind) {
@@ -35,28 +37,27 @@ void IRocr::_calculate(const Indicator& ind) {
         return;
     }
 
+    auto const* src = ind.data();
+    auto* dst = this->data();
+
     if (0 == n) {
-        price_t pre_price = ind[m_discard];
+        price_t pre_price = src[m_discard];
         if (pre_price != 0.0) {
-            _set(1.0, m_discard);
+            dst[m_discard] = 1.0;
             for (size_t i = m_discard + 1; i < total; i++) {
-                _set(ind[i] / pre_price, i);
+                dst[i] = src[i] / pre_price;
             }
         } else {
             for (size_t i = m_discard; i < total; i++) {
-                _set(0.0, i);
+                dst[i] = 0.0;
             }
         }
         return;
     }
 
     for (size_t i = m_discard; i < total; i++) {
-        price_t pre_price = ind[i - n];
-        if (pre_price != 0.0) {
-            _set(ind[i] / pre_price, i);
-        } else {
-            _set(0.0, i);
-        }
+        price_t pre_price = src[i - n];
+        dst[i] = (pre_price != 0.0) ? src[i] / pre_price : 0.0;
     }
 }
 

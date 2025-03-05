@@ -9,7 +9,7 @@
 
 #include <iterator>
 #include "hikyuu/utilities/arithmetic.h"
-#include "hikyuu/Log.h"
+#include "hikyuu/utilities/Log.h"
 #include "hikyuu/utilities/osdef.h"
 #include "DBConnectBase.h"
 
@@ -60,7 +60,7 @@ public:
         if (pos != std::string::npos) {
             m_orderby_inner = fmt::format("{}, id ASC", m_where.substr(pos));
             m_orderby_outer = m_orderby_inner;
-            m_where = m_where.substr(0, pos);
+            m_where = m_where.erase(pos, std::string::npos);
         } else {
             m_orderby_inner = "ORDER BY id";
         }
@@ -154,7 +154,7 @@ private:
         if (m_connect && page != m_current_page) {
             m_buffer.clear();
             m_connect->batchLoad(
-              m_buffer, fmt::format(m_sql_template, TableT::getTableName(), m_where,
+              m_buffer, fmt::format(fmt::runtime(m_sql_template), TableT::getTableName(), m_where,
                                     m_orderby_inner, page_size, page * page_size, m_orderby_outer));
             m_current_page = page;
         }
@@ -179,7 +179,7 @@ private:
 };
 
 template <class TableT, size_t page_size>
-class SQLResultSetIterator : public std::iterator<std::forward_iterator_tag, TableT> {
+class SQLResultSetIterator {
 public:
     using ResultSet = SQLResultSet<TableT, page_size>;
 

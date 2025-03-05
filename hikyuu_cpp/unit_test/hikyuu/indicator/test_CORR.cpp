@@ -7,9 +7,10 @@
  *      Author: fasiondog
  */
 
-#include "doctest/doctest.h"
+#include "../test_config.h"
 #include <fstream>
 #include <hikyuu/StockManager.h>
+#include <hikyuu/indicator/crt/CORR.h>
 #include <hikyuu/indicator/crt/KDATA.h>
 #include <hikyuu/indicator/crt/PRICELIST.h>
 
@@ -41,38 +42,79 @@ TEST_CASE("test_CORR") {
     Indicator y = PRICELIST(b);
 
     // 非法参数 n
-    result = CORR(x, y, 0);
-    CHECK_UNARY(result.empty());
-    result = CORR(x, y, 1);
-    CHECK_UNARY(result.empty());
+    CHECK_THROWS_AS(CORR(x, y, -1), std::exception);
+    CHECK_THROWS_AS(CORR(x, y, 1), std::exception);
 
-    // 正常情况
-    result = CORR(x, y, a.size());
+    // 正常情况，n = 0
+    result = CORR(x, y, 0);
     CHECK_EQ(result.name(), "CORR");
-    CHECK_EQ(result.discard(), 1);
+    CHECK_EQ(result.discard(), 9);
     CHECK_EQ(result.size(), a.size());
 
-    PriceList expect_corr{Null<price_t>(),       -1.0,
-                          -0.034448470909388934, 0.19152710373544807,
-                          0.015928970392743255,  0.294828565718092,
-                          0.3313041022900902,    0.37968156626405264,
-                          0.3883899922978828,    0.3855526143087499};
-    PriceList expect_cov{Null<price_t>(),     -0.014178098871419218, -0.005213202069357936,
-                         0.08610594456567466, 0.006922422657103244,  0.14431515213669424,
-                         0.14697313262129488, 0.15714354567421635,   0.18327891743111874,
-                         0.1628944213834996};
+    price_t nan = Null<price_t>();
+    Indicator expect_corr =
+      PRICELIST(PriceList{nan, nan, nan, nan, nan, nan, nan, nan, nan, 0.385553});
+    Indicator expect_cov =
+      PRICELIST(PriceList{nan, nan, nan, nan, nan, nan, nan, nan, nan, 0.162894});
 
     CHECK_UNARY(std::isnan(result[0]));
+    CHECK_UNARY(std::isnan(result[1]));
     for (int i = result.discard(); i < expect_corr.size(); ++i) {
         CHECK_EQ(result[i], doctest::Approx(expect_corr[i]).epsilon(0.00001));
     }
 
     Indicator cov = result.getResult(1);
     CHECK_UNARY(std::isnan(cov[0]));
+    CHECK_UNARY(std::isnan(cov[1]));
+    for (int i = cov.discard(); i < expect_cov.size(); ++i) {
+        CHECK_EQ(cov[i], doctest::Approx(expect_cov[i]).epsilon(0.00001));
+    }
+
+    // 正常情况，n = 8
+    result = CORR(x, y, 8);
+    CHECK_EQ(result.name(), "CORR");
+    CHECK_EQ(result.discard(), 7);
+    CHECK_EQ(result.size(), a.size());
+
+    expect_corr =
+      PRICELIST(PriceList{nan, nan, nan, nan, nan, nan, nan, 0.379682, 0.504541, 0.572872}, 7);
+    expect_cov =
+      PRICELIST(PriceList{nan, nan, nan, nan, nan, nan, nan, 0.157144, 0.250266, 0.268253}, 7);
+
+    CHECK_UNARY(std::isnan(result[0]));
+    CHECK_UNARY(std::isnan(result[1]));
+    for (int i = result.discard(); i < expect_corr.size(); ++i) {
+        CHECK_EQ(result[i], doctest::Approx(expect_corr[i]).epsilon(0.00001));
+    }
+
+    cov = result.getResult(1);
+    CHECK_UNARY(std::isnan(cov[0]));
+    CHECK_UNARY(std::isnan(cov[1]));
     for (int i = cov.discard(); i < expect_cov.size(); ++i) {
         CHECK_EQ(cov[i], doctest::Approx(expect_cov[i]).epsilon(0.00001));
     }
 }
+
+//-----------------------------------------------------------------------------
+// benchmark
+//-----------------------------------------------------------------------------
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_CORR_benchmark") {
+    Stock stock = getStock("sh000001");
+    KData kdata = stock.getKData(KQuery(0));
+    Indicator c = kdata.close();
+    Indicator h = kdata.close();
+    int cycle = 1000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(test_CORR_benchmark, cycle, fmt::format("data len: {}", c.size()));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = CORR(c, h, 200);
+        }
+    }
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // test export

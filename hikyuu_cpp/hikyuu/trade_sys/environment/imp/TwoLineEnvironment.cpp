@@ -15,22 +15,30 @@ BOOST_CLASS_EXPORT(hku::TwoLineEnvironment)
 
 namespace hku {
 
-TwoLineEnvironment::TwoLineEnvironment() : EnvironmentBase("TwoLine") {
+TwoLineEnvironment::TwoLineEnvironment() : EnvironmentBase("EV_TwoLine") {
     setParam<string>("market", "SH");
 }
 
 TwoLineEnvironment::TwoLineEnvironment(const Indicator& fast, const Indicator& slow)
-: EnvironmentBase("TwoLine"), m_fast(fast), m_slow(slow) {
+: EnvironmentBase("EV_TwoLine"), m_fast(fast), m_slow(slow) {
     setParam<string>("market", "SH");
 }
 
 TwoLineEnvironment::~TwoLineEnvironment() {}
 
+void TwoLineEnvironment::_checkParam(const string& name) const {
+    if ("market" == name) {
+        string market = getParam<string>(name);
+        auto market_info = StockManager::instance().getMarketInfo(market);
+        HKU_CHECK(market_info != Null<MarketInfo>(), "Invalid market: {}", market);
+    }
+}
+
 EnvironmentPtr TwoLineEnvironment::_clone() {
-    TwoLineEnvironment* ptr = new TwoLineEnvironment;
-    ptr->m_fast = m_fast;
-    ptr->m_slow = m_slow;
-    return EnvironmentPtr(ptr);
+    auto ptr = make_shared<TwoLineEnvironment>();
+    ptr->m_fast = m_fast.clone();
+    ptr->m_slow = m_slow.clone();
+    return ptr;
 }
 
 void TwoLineEnvironment::_calculate() {
@@ -47,17 +55,20 @@ void TwoLineEnvironment::_calculate() {
 
     size_t total = close.size();
     size_t start = fast.discard() > slow.discard() ? fast.discard() : slow.discard();
+    auto const* fast_data = fast.data();
+    auto const* slow_data = slow.data();
+    auto const* ks = kdata.data();
     for (size_t i = start; i < total; i++) {
-        if (fast[i] > slow[i]) {
-            _addValid(kdata[i].datetime);
+        if (fast_data[i] > slow_data[i]) {
+            _addValid(ks[i].datetime);
         }
     }
 }
 
 EVPtr HKU_API EV_TwoLine(const Indicator& fast, const Indicator& slow, const string& market) {
-    TwoLineEnvironment* ptr = new TwoLineEnvironment(fast, slow);
+    EVPtr ptr = make_shared<TwoLineEnvironment>(fast, slow);
     ptr->setParam<string>("market", market);
-    return EVPtr(ptr);
+    return ptr;
 }
 
 } /* namespace hku */

@@ -17,11 +17,12 @@ namespace hku {
 class SingleSignal2 : public SignalBase {
 public:
     SingleSignal2();
-    SingleSignal2(const Indicator&);
+    explicit SingleSignal2(const Indicator&);
     virtual ~SingleSignal2();
 
+    virtual void _checkParam(const string& name) const override;
     virtual SignalPtr _clone() override;
-    virtual void _calculate() override;
+    virtual void _calculate(const KData& kdata) override;
 
 private:
     Indicator m_ind;

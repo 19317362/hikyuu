@@ -12,10 +12,6 @@
 #include "../DataType.h"
 #include "../config.h"
 
-#if HKU_SUPPORT_SERIALIZATION
-#include <boost/serialization/nvp.hpp>
-#endif
-
 namespace hku {
 
 /**
@@ -24,17 +20,17 @@ namespace hku {
  */
 class HKU_API FundsRecord {
 public:
-    FundsRecord();
+    FundsRecord() = default;
     FundsRecord(price_t cash, price_t market_value, price_t short_market_value, price_t base_cash,
                 price_t base_asset, price_t borrow_cash, price_t borrow_asset);
 
-    price_t cash;               /**< 当前现金 */
-    price_t market_value;       /**< 当前多头市值 */
-    price_t short_market_value; /**< 当前空头仓位市值 */
-    price_t base_cash;          /**< 当前投入本金principal */
-    price_t base_asset;         /**< 当前投入的资产价值 */
-    price_t borrow_cash;        /**< 当前借入的资金，即负债 */
-    price_t borrow_asset;       /**< 当前借入证券资产价值 */
+    price_t cash{0.0};               /**< 当前现金 */
+    price_t market_value{0.0};       /**< 当前多头市值 */
+    price_t short_market_value{0.0}; /**< 当前空头仓位市值 */
+    price_t base_cash{0.0};          /**< 当前投入本金principal */
+    price_t base_asset{0.0};         /**< 当前投入的资产价值 */
+    price_t borrow_cash{0.0};        /**< 当前借入的资金，即负债 */
+    price_t borrow_asset{0.0};       /**< 当前借入证券资产价值 */
 
     // 当前总资产 = 现金 + 多头市值 + 空头数量×（借入价格 - 当前价格)
     //          = cash + market_value + borrow_asset - short_market_value
@@ -47,9 +43,34 @@ public:
     // 当前收益 = 当前净资产 - 当前投入本值资产
     //         = cash + market_value - short_market_value - borrow_cash - base_cash - base_asset
 
-    FundsRecord operator+(const FundsRecord other);
+    // 当前总资产
+    price_t total_assets() const {
+        return cash + market_value + borrow_asset - short_market_value;
+    }
 
-    FundsRecord& operator+=(const FundsRecord other);
+    // 当前净资产
+    price_t net_assets() const {
+        return cash + market_value - short_market_value - borrow_cash;
+    }
+
+    // 总负债
+    price_t total_borrow() const {
+        return borrow_cash + borrow_asset;
+    }
+
+    // 当前投入本值资产
+    price_t total_base() const {
+        return base_cash + base_asset;
+    }
+
+    // 当前收益
+    price_t profit() const {
+        return cash + market_value - short_market_value - borrow_cash - base_cash - base_asset;
+    }
+
+    FundsRecord operator+(const FundsRecord& other) const;
+
+    FundsRecord& operator+=(const FundsRecord& other);
 
     // 序列化支持
 #if HKU_SUPPORT_SERIALIZATION
@@ -67,6 +88,9 @@ private:
     }
 #endif
 };
+
+typedef vector<FundsRecord> FundsList;
+typedef vector<FundsRecord> FundsRecordList;
 
 /**
  * 输出TradeRecord信息

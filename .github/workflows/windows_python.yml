@@ -24,28 +24,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache windows packages
-      id: cache-xmake-windows
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-windows-modules
-      with:
-        path: /Users/%USERNAME/.xmake
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
-
     - uses: xmake-io/github-action-setup-xmake@v1
       with:
-        xmake-version: branch@master
+        xmake-version: 2.9.8
         actions-cache-folder: '.xmake-cache'
+        actions-cache-key: 'windows'
    
     - name: configure
       shell: cmd
       run: |
-        xmake f -k shared -y
+        xmake f -c -k shared -y --runtimes="MD"
 
     - name: build
       shell: cmd

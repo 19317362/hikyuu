@@ -21,8 +21,10 @@ ILowLine::ILowLine() : IndicatorImp("LLV", 1) {
 
 ILowLine::~ILowLine() {}
 
-bool ILowLine::check() {
-    return haveIndParam("n") || getParam<int>("n") >= 0;
+void ILowLine::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
 }
 
 void ILowLine::_calculate(const Indicator& ind) {
@@ -52,37 +54,40 @@ void ILowLine::_calculate(const Indicator& ind) {
         n = total;
     }
 
+    auto const* src = ind.data();
+    auto* dst = this->data();
+
     size_t startPos = m_discard;
     size_t first_end = startPos + n >= total ? total : startPos + n;
 
-    price_t min = ind[startPos];
+    price_t min = src[startPos];
     size_t pre_pos = startPos;
     for (size_t i = startPos; i < first_end; i++) {
-        if (ind[i] <= min) {
-            min = ind[i];
+        if (src[i] <= min) {
+            min = src[i];
             pre_pos = i;
         }
-        _set(min, i);
+        dst[i] = min;
     }
 
     for (size_t i = first_end; i < total; i++) {
         size_t j = i + 1 - n;
         if (pre_pos < j) {
             pre_pos = j;
-            min = ind[j];
-            for (size_t j = pre_pos + 1; j <= i; j++) {
-                if (ind[j] <= min) {
-                    min = ind[j];
-                    pre_pos = j;
+            min = src[j];
+            for (size_t k = pre_pos + 1; k <= i; k++) {
+                if (src[k] <= min) {
+                    min = src[k];
+                    pre_pos = k;
                 }
             }
         } else {
-            if (ind[i] <= min) {
-                min = ind[i];
+            if (src[i] <= min) {
+                min = src[i];
                 pre_pos = i;
             }
         }
-        _set(min, i);
+        dst[i] = min;
     }
 }
 

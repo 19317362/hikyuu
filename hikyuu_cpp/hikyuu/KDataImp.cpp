@@ -21,11 +21,11 @@ KDataImp::KDataImp(const Stock& stock, const KQuery& query)
 
     m_buffer = m_stock.getKRecordList(query);
 
-    //不支持复权时，直接返回
+    // 不支持复权时，直接返回
     if (query.recoverType() == KQuery::NO_RECOVER)
         return;
 
-    //日线以上复权处理
+    // 日线以上复权处理
     if (query.kType() == KQuery::WEEK || query.kType() == KQuery::MONTH ||
         query.kType() == KQuery::QUARTER || query.kType() == KQuery::HALFYEAR ||
         query.kType() == KQuery::YEAR) {
@@ -61,6 +61,14 @@ KDataImp::KDataImp(const Stock& stock, const KQuery& query)
 }
 
 KDataImp::~KDataImp() {}
+
+DatetimeList KDataImp::getDatetimeList() const {
+    DatetimeList result;
+    for (const auto& record : m_buffer) {
+        result.emplace_back(record.datetime);
+    }
+    return result;
+}
 
 size_t KDataImp::startPos() {
     if (!m_have_pos_in_stock) {
@@ -181,22 +189,28 @@ void KDataImp::_recoverForward() {
 
     size_t pre_pos = 0;
     for (; weightIter != weightList.end(); ++weightIter) {
-        //计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
+        // 计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
         if ((weightIter->countAsGift() == 0.0 && weightIter->countForSell() == 0.0 &&
              weightIter->priceForSell() == 0.0 && weightIter->bonus() == 0.0 &&
-             weightIter->increasement() == 0.0))
+             weightIter->increasement() == 0.0 && weightIter->suogu() == 0.0))
             continue;
 
         size_t i = pre_pos;
         while (i < total && m_buffer[i].datetime < weightIter->datetime()) {
             i++;
         }
-        pre_pos = i;  //除权日
+        pre_pos = i;  // 除权日
 
-        price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
-                                weightIter->increasement());
-        price_t denominator = 1.0 + change;  //分母 = (1+流通股份变动比例)
-        price_t temp = weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        price_t denominator = 0.0, temp = 0.0;
+        if (weightIter->suogu() != 0.0) {
+            denominator = weightIter->suogu();
+        } else {
+            price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
+                                    weightIter->increasement());
+            // change 小于 0 时为缩股
+            denominator = 1.0 + change;  // 分母 = (1+流通股份变动比例)
+            temp = weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        }
 
         if (denominator == 1.0 && temp == 0.0)
             continue;
@@ -228,14 +242,13 @@ void KDataImp::_recoverBackward() {
     Datetime end_date(m_buffer.back().datetime.date() + bd::days(1));
     StockWeightList weightList = m_stock.getWeight(start_date, end_date);
     StockWeightList::const_reverse_iterator weightIter = weightList.rbegin();
-    StockWeightList::const_reverse_iterator pre_weightIter;
 
     size_t pre_pos = total - 1;
     for (; weightIter != weightList.rend(); ++weightIter) {
-        //计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
+        // 计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
         if ((weightIter->countAsGift() == 0.0 && weightIter->countForSell() == 0.0 &&
              weightIter->priceForSell() == 0.0 && weightIter->bonus() == 0.0 &&
-             weightIter->increasement() == 0.0))
+             weightIter->increasement() == 0.0 && weightIter->suogu() == 0.0))
             continue;
 
         size_t i = pre_pos;
@@ -244,11 +257,17 @@ void KDataImp::_recoverBackward() {
         }
         pre_pos = i;
 
-        //流通股份变动比例
-        price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
-                                weightIter->increasement());
-        price_t denominator = 1.0 + change;  //(1+流通股份变动比例)
-        price_t temp = 0.1 * weightIter->bonus() - weightIter->priceForSell() * change;
+        price_t denominator = 0.0, temp = 0.0;
+        if (weightIter->suogu() != 0.0) {
+            denominator = weightIter->suogu();
+        } else {
+            // 流通股份变动比例
+            price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
+                                    weightIter->increasement());
+            // change 小于 0 时为缩股
+            denominator = 1.0 + change;  //(1+流通股份变动比例)
+            temp = 0.1 * weightIter->bonus() - weightIter->priceForSell() * change;
+        }
 
         if (denominator == 1.0 && temp == 0.0)
             continue;
@@ -285,37 +304,42 @@ void KDataImp::_recoverEqualForward() {
         return;
     }
 
-    KRecordList kdata = m_buffer;  //防止同一天两条权息记录
+    KRecordList kdata = m_buffer;  // 防止同一天两条权息记录
     StockWeightList::const_iterator weightIter = weightList.begin();
-    StockWeightList::const_iterator pre_weightIter;
     size_t pre_pos = 0;
     for (; weightIter != weightList.end(); ++weightIter) {
-        //计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
+        // 计算流通股份变动比例,但不处理仅仅只有流通股本改变的情况
         if ((weightIter->countAsGift() == 0.0 && weightIter->countForSell() == 0.0 &&
              weightIter->priceForSell() == 0.0 && weightIter->bonus() == 0.0 &&
-             weightIter->increasement() == 0.0))
+             weightIter->increasement() == 0.0 && weightIter->suogu() == 0.0))
             continue;
 
         size_t i = pre_pos;
         while (i < total && m_buffer[i].datetime < weightIter->datetime()) {
             i++;
         }
-        pre_pos = i;  //除权日
+        pre_pos = i;  // 除权日
 
-        //股权登记日（即除权日的前一天数据）收盘价
+        // 股权登记日（即除权日的前一天数据）收盘价
         if (pre_pos == 0) {
             continue;
         }
         price_t closePrice = kdata[pre_pos - 1].closePrice;
         if (closePrice == 0.0) {
-            continue;  //除零保护
+            continue;  // 除零保护
         }
 
-        //流通股份变动比例
-        price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
-                                weightIter->increasement());
-        price_t denominator = 1.0 + change;  //(1+流通股份变动比例)
-        price_t temp = weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        price_t denominator = 0.0, temp = 0.0;
+        if (weightIter->suogu() != 0.0) {
+            denominator = weightIter->suogu();
+        } else {
+            // 流通股份变动比例
+            price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
+                                    weightIter->increasement());
+            // change 小于 0 时为缩股
+            denominator = 1.0 + change;  //(1+流通股份变动比例)
+            temp = weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        }
 
         if (denominator == 0.0 || (denominator == 1.0 && temp == 0.0))
             continue;
@@ -346,7 +370,6 @@ void KDataImp::_recoverEqualBackward() {
     Datetime end_date(m_buffer.back().datetime.date() + bd::days(1));
     StockWeightList weightList = m_stock.getWeight(start_date, end_date);
     StockWeightList::const_reverse_iterator weightIter = weightList.rbegin();
-    StockWeightList::const_reverse_iterator pre_weightIter;
 
     size_t pre_pos = total - 1;
     for (; weightIter != weightList.rend(); ++weightIter) {
@@ -354,19 +377,27 @@ void KDataImp::_recoverEqualBackward() {
         while (i > 0 && m_buffer[i].datetime > weightIter->datetime()) {
             i--;
         }
-        pre_pos = i;  //除权日
+        pre_pos = i;  // 除权日
 
-        //股权登记日（即除权日的前一天数据）收盘价
+        // 股权登记日（即除权日的前一天数据）收盘价
         if (pre_pos == 0) {
             continue;
         }
+
         price_t closePrice = m_buffer[pre_pos - 1].closePrice;
 
-        //流通股份变动比例
-        price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
-                                weightIter->increasement());
-        price_t denominator = 1.0 + change;  //(1+流通股份变动比例)
-        price_t temp = closePrice + weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        price_t denominator = 0.0, temp = closePrice;
+        if (weightIter->suogu() != 0.0) {
+            denominator = weightIter->suogu();
+        } else {
+            // 流通股份变动比例
+            price_t change = 0.1 * (weightIter->countAsGift() + weightIter->countForSell() +
+                                    weightIter->increasement());
+            // change 小于 0 时为缩股
+            denominator = 1.0 + change;  //(1+流通股份变动比例)
+            temp = closePrice + weightIter->priceForSell() * change - 0.1 * weightIter->bonus();
+        }
+
         if (temp == 0.0 || denominator == 0.0) {
             continue;
         }

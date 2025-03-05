@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import platform
+import os
 try:
     from setuptools import find_packages, setup
 except ImportError:
@@ -47,52 +48,24 @@ hku_platforms = "Independant"
 hku_url = "http://hikyuu.org/"
 
 hku_description = "Hikyuu Quant Framework for System Trading Analysis and backtester"
-with open("./hikyuu/README.rst", encoding='utf-8') as f:
+with open("./readme.md", encoding='utf-8') as f:
     hku_long_description = f.read()
 
 hku_data_files = []
 
-packages = [
-    'hikyuu',
-    'hikyuu/admin',
-    'hikyuu/admin/language',
-    'hikyuu/analysis',
-    'hikyuu/config',
-    'hikyuu/config/block',
-    'hikyuu/cpp',
-    'hikyuu/data',
-    'hikyuu/data/mysql_upgrade',
-    'hikyuu/data/sqlite_upgrade',
-    'hikyuu/data/sqlite_mem_sql',
-    'hikyuu/data_driver',
-    'hikyuu/examples',
-    'hikyuu/examples/notebook',
-    'hikyuu/examples/notebook/images',
-    'hikyuu/examples/notebook/Demo',
-    'hikyuu/flat',
-    'hikyuu/fetcher',
-    'hikyuu/fetcher/proxy',
-    'hikyuu/fetcher/stock',
-    'hikyuu/gui',
-    'hikyuu/gui/data',
-    'hikyuu/indicator',
-    'hikyuu/draw',
-    'hikyuu/draw/drawplot',
-    'hikyuu/shell',
-    'hikyuu/strategy',
-    'hikyuu/strategy/demo',
-    'hikyuu/test',
-    'hikyuu/tools',
-    'hikyuu/trade_manage',
-    'hikyuu/trade_sys',
-    'hikyuu/util',
-]
+packages = ['hikyuu']
+for root, dirs, files in os.walk('hikyuu'):
+    for p in dirs:
+        if p.find('__pycache__') < 0 and p.find('ipynb_checkpoints') < 0 \
+                and p.find('virtual_documents') < 0 and p.find('idea') < 0 and p.find('venv') < 0:
+            packages.append(f'{root}/{p}')
 
 setup(
     name=hku_name,
     version=hku_version,
     description=hku_description,
-    long_description_content_type="text/x-rst",
+    # long_description_content_type="text/x-rst",
+    long_description_content_type='text/markdown',
     long_description=hku_long_description,
     author=hku_author,
     author_email=hku_author_email,
@@ -106,9 +79,9 @@ setup(
     package_data={
         '': [
             '*.rst', '*.pyd', '*.png', '*.md', '*.ipynb', '*.ini', '*.sql', '*.properties', '*.xml',
-            'LICENSE.txt', '*.dll', '*.exe', '*.ico', '*.so', '*.dylib',
-            '*.so.*', '*.qm', 'libboost_serialization*',
-            'libboost_python{}*'.format(py_version)
+            'LICENSE.txt', '*.dll', '*.exe', '*.ico', '*.so', '*.dylib', '*.h', '*.lib',
+            '*.so.*', '*.qm', 'libboost_serialization*', 'libboost_python{}*'.format(py_version),
+            '*.png'
         ],
     },
     data_files=hku_data_files,
@@ -117,7 +90,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
@@ -129,6 +102,8 @@ setup(
         # Pick your license as you wish (should match "license" above)
         'License :: OSI Approved :: MIT License',
         'Operating System :: Microsoft :: Windows',
+        'Operating System :: POSIX :: Linux',
+        'Operating System :: MacOS :: MacOS X',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
@@ -136,12 +111,17 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
     ],
     entry_points={
-        'gui_scripts': [
-            'HikyuuTDX=hikyuu.gui.HikyuuTDX:start',
-        ],
+        # win11下使用 GUI 方式，会立刻 timeout，导致无法下载
+        # 'gui_scripts': [
+        #     'HikyuuTDX=hikyuu.gui.HikyuuTDX:start',
+        # ],
         'console_scripts': [
+            'HikyuuTDX=hikyuu.gui.HikyuuTDX:start',
             'importdata=hikyuu.gui.importdata:main',
         ]
     },

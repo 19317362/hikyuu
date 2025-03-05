@@ -19,6 +19,13 @@ FixedPercentSlippage::FixedPercentSlippage() : SlippageBase("FixedPercent") {
 
 FixedPercentSlippage::~FixedPercentSlippage() {}
 
+void FixedPercentSlippage::_checkParam(const string& name) const {
+    if ("p" == name) {
+        double p = getParam<double>(name);
+        HKU_ASSERT(p >= 0.0 && p < 1.0);
+    }
+}
+
 price_t FixedPercentSlippage ::getRealBuyPrice(const Datetime& datetime, price_t price) {
     return price * (1 + getParam<double>("p"));
 }
@@ -30,9 +37,9 @@ price_t FixedPercentSlippage ::getRealSellPrice(const Datetime& datetime, price_
 void FixedPercentSlippage::_calculate() {}
 
 SlippagePtr HKU_API SP_FixedPercent(double p) {
-    FixedPercentSlippage* ptr = new FixedPercentSlippage;
+    SlippagePtr ptr = make_shared<FixedPercentSlippage>();
     ptr->setParam("p", p);
-    return SlippagePtr(ptr);
+    return ptr;
 }
 
 } /* namespace hku */

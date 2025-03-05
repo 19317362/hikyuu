@@ -14,7 +14,7 @@ BOOST_CLASS_EXPORT(hku::ITime)
 namespace hku {
 
 ITime::ITime() : IndicatorImp("TIME") {
-    setParam<string>("type", "time");
+    setParam<string>("type", "TIME");
 }
 
 ITime::~ITime() {}
@@ -28,10 +28,14 @@ ITime::ITime(const KData& k, const string& type) : IndicatorImp() {
     ITime::_calculate(Indicator());
 }
 
-bool ITime::check() {
-    string part = getParam<string>("type");
-    return "TIME" == part || "DATE" == part || "YEAR" == part || "MONTH" == part ||
-           "WEEK" == part || "DAY" == part || "HOUR" == part || "MINUTE" == part;
+void ITime::_checkParam(const string& name) const {
+    if ("type" == name) {
+        string param_type = getParam<string>("type");
+        HKU_CHECK("TIME" == param_type || "DATE" == param_type || "YEAR" == param_type ||
+                    "MONTH" == param_type || "WEEK" == param_type || "DAY" == param_type ||
+                    "HOUR" == param_type || "MINUTE" == param_type,
+                  "Invalid param type: {}", param_type);
+    }
 }
 
 void ITime::_calculate(const Indicator& data) {
@@ -45,48 +49,49 @@ void ITime::_calculate(const Indicator& data) {
     DatetimeList ds = kdata.getDatetimeList();
 
     _readyBuffer(total, 1);
+    auto* dst = this->data();
 
     string type_name = getParam<string>("type");
     if ("TIME" == type_name) {
         for (size_t i = 0; i < total; i++) {
             const auto& d = ds[i];
-            _set(d.hour() * 10000 + d.minute() * 100 + d.second(), i);
+            dst[i] = d.hour() * 10000 + d.minute() * 100 + d.second();
         }
 
     } else if ("DATE" == type_name) {
         for (size_t i = 0; i < total; i++) {
             const auto& d = ds[i];
-            _set((d.year() - 1900) * 10000 + d.month() * 100 + d.day(), i);
+            dst[i] = (d.year() - 1900) * 10000 + d.month() * 100 + d.day();
         }
 
     } else if ("YEAR" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].year(), i);
+            dst[i] = ds[i].year();
         }
 
     } else if ("MONTH" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].month(), i);
+            dst[i] = ds[i].month();
         }
 
     } else if ("WEEK" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].dayOfWeek(), i);
+            dst[i] = ds[i].dayOfWeek();
         }
 
     } else if ("DAY" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].day(), i);
+            dst[i] = ds[i].day();
         }
 
     } else if ("HOUR" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].hour(), i);
+            dst[i] = ds[i].hour();
         }
 
     } else if ("MINUTE" == type_name) {
         for (size_t i = 0; i < total; i++) {
-            _set(ds[i].minute(), i);
+            dst[i] = ds[i].minute();
         }
     }
 }

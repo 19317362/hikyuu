@@ -19,16 +19,23 @@ FixedCapitalMoneyManager::FixedCapitalMoneyManager() : MoneyManagerBase("MM_Fixe
 
 FixedCapitalMoneyManager::~FixedCapitalMoneyManager() {}
 
+void FixedCapitalMoneyManager::_checkParam(const string& name) const {
+    if ("capital" == name) {
+        double capital = getParam<double>("capital");
+        HKU_ASSERT(capital > 0.0);
+    }
+}
+
 double FixedCapitalMoneyManager ::_getBuyNumber(const Datetime& datetime, const Stock& stock,
                                                 price_t price, price_t risk, SystemPart from) {
     double capital = getParam<double>("capital");
-    return capital > 0.0 ? size_t(m_tm->cash(datetime, m_query.kType()) / capital) : 0;
+    return m_tm->cash(datetime, m_query.kType()) / capital;
 }
 
 MoneyManagerPtr HKU_API MM_FixedCapital(double capital) {
-    FixedCapitalMoneyManager* p = new FixedCapitalMoneyManager();
+    MoneyManagerPtr p = make_shared<FixedCapitalMoneyManager>();
     p->setParam<double>("capital", capital);
-    return MoneyManagerPtr(p);
+    return p;
 }
 
 } /* namespace hku */

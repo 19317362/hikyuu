@@ -7,7 +7,7 @@
  *      Author: fasiondog
  */
 
-#include "doctest/doctest.h"
+#include "../test_config.h"
 #include <fstream>
 #include <hikyuu/StockManager.h>
 #include <hikyuu/indicator/crt/ACOS.h>
@@ -28,7 +28,7 @@ TEST_CASE("test_ACOS") {
 
     PriceList a;
     for (int i = 0; i < 10; ++i) {
-        a.push_back(i / 10);
+        a.push_back(i / 9.);
     }
 
     Indicator data = PRICELIST(a);
@@ -43,8 +43,35 @@ TEST_CASE("test_ACOS") {
     result = ACOS(-0.1);
     CHECK_EQ(result.size(), 1);
     CHECK_EQ(result.discard(), 0);
-    CHECK_EQ(result[0], std::acos(-0.1));
+    CHECK_EQ(result[0], doctest::Approx(std::acos(-0.1)));
+
+    result = ACOS(-1.1);
+    CHECK_UNARY(std::isnan(result[0]));
+
+    result = ACOS(2.1);
+    CHECK_UNARY(std::isnan(result[0]));
 }
+
+//-----------------------------------------------------------------------------
+// benchmark
+//-----------------------------------------------------------------------------
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_ACOS_benchmark") {
+    Stock stock = getStock("sh000001");
+    KData kdata = stock.getKData(KQuery(0));
+    Indicator c = kdata.close();
+    int cycle = 1000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(test_ACOS_benchmark, cycle, fmt::format("data len: {}", c.size()));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator ind = ACOS();
+            Indicator result = ind(c);
+        }
+    }
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // test export
